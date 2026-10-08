@@ -8,7 +8,10 @@ export function ForgotPasswordForm() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  async function onSubmit(form: FormData) {
+  // onSubmit, not <form action>: React would reset the fields even when the server refuses.
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
     setBusy(true)
     setError(null)
     const result = await authClient.requestPasswordReset({ email: String(form.get('email') ?? '').trim(), redirectTo: '/reset-password' })
@@ -30,7 +33,7 @@ export function ForgotPasswordForm() {
     )
   }
   return (
-    <form action={onSubmit} className="card mx-auto max-w-md space-y-4">
+    <form onSubmit={onSubmit} className="card mx-auto max-w-md space-y-4">
       <div>
         <label className="field-label" htmlFor="email">Email</label>
         <input className="field-input" id="email" name="email" type="email" autoComplete="email" required />

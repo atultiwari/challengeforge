@@ -10,7 +10,10 @@ export function AuthForm({ mode, next }: { mode: 'sign-in' | 'sign-up'; next: st
   const [busy, setBusy] = useState(false)
   const [checkEmail, setCheckEmail] = useState(false)
 
-  async function onSubmit(form: FormData) {
+  // onSubmit, not <form action>: React would reset the fields even when the server refuses.
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
     setBusy(true)
     setError(null)
     const email = String(form.get('email') ?? '').trim()
@@ -42,7 +45,7 @@ export function AuthForm({ mode, next }: { mode: 'sign-in' | 'sign-up'; next: st
     )
   }
   return (
-    <form action={onSubmit} className="card mx-auto max-w-md space-y-4">
+    <form onSubmit={onSubmit} className="card mx-auto max-w-md space-y-4">
       {mode === 'sign-up' && (
         <div>
           <label className="field-label" htmlFor="name">Your name</label>

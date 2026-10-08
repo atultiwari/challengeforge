@@ -10,7 +10,10 @@ export function ResetPasswordForm({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  async function onSubmit(form: FormData) {
+  // onSubmit, not <form action>: React would reset the fields even when the server refuses.
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
     const password = String(form.get('password') ?? '')
     if (password !== String(form.get('confirm') ?? '')) {
       setError('The two passwords do not match.')
@@ -36,7 +39,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
     )
   }
   return (
-    <form action={onSubmit} className="card mx-auto max-w-md space-y-4">
+    <form onSubmit={onSubmit} className="card mx-auto max-w-md space-y-4">
       <div>
         <label className="field-label" htmlFor="password">New password</label>
         <input className="field-input" id="password" name="password" type="password" minLength={MIN_LENGTH} maxLength={128} autoComplete="new-password" required />

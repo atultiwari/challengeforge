@@ -41,18 +41,27 @@ export function SimpleForm({ url, fields, submitLabel, then = { refresh: true },
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  async function onSubmit(form: FormData) {
+  // onSubmit, not <form action>: React resets an action form after every submit, which would wipe
+  // what the person typed when the server refuses it. Fields stay as typed until a save succeeds.
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const element = event.currentTarget
+    const form = new FormData(element)
     setBusy(true)
     setError(null)
     const r = await postJson<Record<string, unknown>>(url, bodyOf(form, fields))
     setBusy(false)
     if (!r.ok) return setError(r.error.message)
     if ('goTo' in then) router.push(then.goTo.replace(/\{(\w+)\}/g, (_, k: string) => encodeURIComponent(String(r.data[k] ?? ''))))
-    else router.refresh()
+    else {
+      // Saved: clear one-off inputs; fields with stored values show them again after the refresh.
+      element.reset()
+      router.refresh()
+    }
   }
 
   return (
-    <form action={onSubmit} className={inline ? 'flex flex-wrap items-end gap-2' : 'space-y-3'}>
+    <form onSubmit={onSubmit} className={inline ? 'flex flex-wrap items-end gap-2' : 'space-y-3'}>
       {fields.map((f) =>
         f.type === 'hidden' ? (
           <input key={f.name} type="hidden" name={f.name} value={f.value ?? ''} />

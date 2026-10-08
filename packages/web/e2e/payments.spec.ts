@@ -9,8 +9,12 @@ test('an admin restricts and prices a pack; a learner sees it locked, buys it, a
   await page.goto('/admin/access')
   await page.waitForLoadState('networkidle')
   const card = page.locator('section').filter({ has: page.getByRole('heading', { name: 'E2E premium pack (synthetic)' }) })
-  page.once('dialog', (d) => void d.accept())
-  await card.getByRole('button', { name: 'Restrict' }).click()
+  // Idempotent: a retried run finds the pack already restricted.
+  const restrict = card.getByRole('button', { name: 'Restrict' })
+  if (await restrict.isVisible()) {
+    page.once('dialog', (d) => void d.accept())
+    await restrict.click()
+  }
   await expect(card.getByText('restricted', { exact: true })).toBeVisible()
   await card.getByLabel('Price').fill('499')
   await card.getByLabel('Currency').fill('INR')

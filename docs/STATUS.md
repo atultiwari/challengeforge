@@ -51,14 +51,14 @@ judgement call made without the owner (review in one pass)._
 
 ## Test totals (latest local run)
 
-- 464 unit tests.
+- 465 unit tests.
 - 125 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
-- 15 Playwright end-to-end journeys, against MariaDB 11.8 in CI. They include a simulated LMS and the mock payment checkout.
+- 16 Playwright end-to-end journeys, against MariaDB 11.8 in CI. They include a simulated LMS and the mock payment checkout.
 
 ## In progress now
 
 **Phase 4** ([plan](PHASE-4-PLAN.md)):
-- **R1, settings and themes:** mostly done (presets, a WCAG-checked custom accent, logo, footer, sign-ups switch). Its end-to-end test is next.
+- **R1, settings and themes: done** (presets, a WCAG-checked custom accent, logo, footer, sign-ups switch; E2E covers it).
 - **R2:** setup wizard.
 - **R3:** notifications.
 - **R4:** multi-site.

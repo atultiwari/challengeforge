@@ -16,13 +16,18 @@ export function CollaboratorsPanel({ challengeId, initial, canManage }: Props) {
   const [busy, setBusy] = useState(false)
   const base = `/api/author/challenges/${challengeId}/collaborators`
 
-  async function add(form: FormData) {
+  // onSubmit, not <form action>: React would reset the fields even when the server refuses.
+  async function add(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const element = event.currentTarget
+    const form = new FormData(element)
     setBusy(true)
     setError(null)
     const r = await postJson<Collaborator>(base, { email: String(form.get('email') ?? '').trim() })
     setBusy(false)
     if (!r.ok) return setError(r.error.message)
     setPeople((list) => (list.some((p) => p.userId === r.data.userId) ? list : [...list, r.data]))
+    element.reset()
   }
 
   async function remove(userId: string) {
@@ -49,7 +54,7 @@ export function CollaboratorsPanel({ challengeId, initial, canManage }: Props) {
         </ul>
       )}
       {canManage && (
-        <form action={add} className="flex flex-wrap items-end gap-2">
+        <form onSubmit={add} className="flex flex-wrap items-end gap-2">
           <div className="grow">
             <label className="field-label" htmlFor="coauthor-email">Add a co-author by email</label>
             <input className="field-input" id="coauthor-email" name="email" type="email" required maxLength={254} />
