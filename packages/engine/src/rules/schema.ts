@@ -81,7 +81,15 @@ export const MetricTargetRuleSchema = z.object({
   max_specificity_gap: z.number().min(0).max(1),
 })
 
+/** A typed answer matching any accepted term or synonym (e.g. a diagnosis). */
+export const TermMatchRuleSchema = z.object({
+  type: z.literal('term_match'),
+  field: z.string().min(1),
+  accepted: z.array(z.string().min(1)).min(1),
+})
+
 export const LeafRuleSchema = z.discriminatedUnion('type', [
+  TermMatchRuleSchema,
   ExactRuleSchema,
   NumericRangeRuleSchema,
   SetMatchRuleSchema,
@@ -111,3 +119,4 @@ export type SetMatchRule = z.infer<typeof SetMatchRuleSchema>
 export type LlmRubricRule = z.infer<typeof LlmRubricRuleSchema>
 export type CanaryRule = z.infer<typeof CanaryRuleSchema>
 export type MetricTargetRule = z.infer<typeof MetricTargetRuleSchema>
+export type TermMatchRule = z.infer<typeof TermMatchRuleSchema>

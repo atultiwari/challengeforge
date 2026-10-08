@@ -6,6 +6,7 @@ import { validateSetMatch } from './set-match'
 import { validateCanary } from './canary'
 import { validateLlmRubric } from './llm-rubric'
 import { validateMetricTarget } from './metric-target'
+import { validateTermMatch } from './term-match'
 
 async function validateLeaf(rule: LeafRule, payload: unknown, ctx: RuleContext): Promise<ScoredOutcome> {
   switch (rule.type) {
@@ -21,6 +22,8 @@ async function validateLeaf(rule: LeafRule, payload: unknown, ctx: RuleContext):
       return validateLlmRubric(rule, payload, ctx)
     case 'metric_target':
       return validateMetricTarget(rule, payload, ctx)
+    case 'term_match':
+      return validateTermMatch(rule, payload, ctx)
     default:
       // Unknown rule type: fail closed. An unrecognised key must never pass.
       return { passed: false, message: 'This answer could not be checked.' }
