@@ -11,7 +11,7 @@ judgement call made without the owner (review in one pass)._
 | 0 | Foundations and the one-contract proof | ✅ Done | [PHASE-0-REPORT](PHASE-0-REPORT.md) |
 | 1 | Single-site MVP (Clinical AI Level 1 on MySQL) | ✅ Done | [PHASE-1-REPORT](PHASE-1-REPORT.md) |
 | 2 | Interactive in the product (diagnostic sims, AI missions, jobs, review queue, pack export) | ✅ Done | [PHASE-2-REPORT](PHASE-2-REPORT.md) |
-| 3 | Publishing and institutions (roles, cohorts, payments, certificates, analytics, LTI 1.3) | ✅ Built. **Review fixes in progress** | [PHASE-3-REPORT](PHASE-3-REPORT.md) |
+| 3 | Publishing and institutions (roles, cohorts, payments, certificates, analytics, LTI 1.3) | ✅ Done (reviewed; all high and medium findings fixed) | [PHASE-3-REPORT](PHASE-3-REPORT.md) |
 | 4 | Multi-site and themes | 🚧 Started: R1 (settings and themes) part 1 is in | [PHASE-4-PLAN](PHASE-4-PLAN.md) |
 | 5 | Ecosystem (pack registry, type SDK, xAPI, LLM patient) | Not started | PLAN.md §8 |
 
@@ -51,36 +51,17 @@ judgement call made without the owner (review in one pass)._
 
 ## Test totals (latest local run)
 
-- 458+ unit tests.
-- 122 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
+- 464 unit tests.
+- 125 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
 - 15 Playwright end-to-end journeys, against MariaDB 11.8 in CI. They include a simulated LMS and the mock payment checkout.
 
 ## In progress now
 
-The Phase 3 security and code review fixes (reviews completed 2026-10-08; no critical findings).
-
-**Done:**
-- payment webhooks are never lost;
-- removing an instructor ends their access to the organisation's cohorts;
-- only editors and admins can assign restricted content;
-- a result is never undone by a certificate or LMS-grade failure;
-- results pending review don't count as passes;
-- a certificate can't be missed when the last two challenges finish at the same time;
-- concurrent overrides are prevented;
-- instructor review checks run as single SQL queries;
-- analytics are capped per challenge;
-- email-keyed roles require a confirmed email;
-- currency allow-list;
-- analytics no longer break the CSP.
-
-**Remaining:**
-- LTI endpoint rate limits and body cap;
-- required JWT claims and stricter URLs;
-- LTI grants (per-platform switch, expiry, no un-revoke);
-- score outbox claim;
-- small fixes.
-
-**Then:** the rest of Phase 4 (R1 finish, R2 setup wizard, R3 notifications, R4 multi-site).
+**Phase 4** ([plan](PHASE-4-PLAN.md)):
+- **R1, settings and themes:** mostly done (presets, a WCAG-checked custom accent, logo, footer, sign-ups switch). Its end-to-end test is next.
+- **R2:** setup wizard.
+- **R3:** notifications.
+- **R4:** multi-site.
 
 ## Waiting on the owner
 

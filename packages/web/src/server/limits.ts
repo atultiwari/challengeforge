@@ -19,3 +19,18 @@ export function withinLimit(kind: keyof typeof LIMITERS, scope: Scope, request: 
   const who = scope.principal ? `u:${scope.principal.userId}` : `ip:${clientIp(request.headers)}`
   return LIMITERS[kind].allow(who)
 }
+
+/**
+ * Per-address budgets for endpoints that anyone on the internet can call
+ * without a session: LMS login and launch, and payment webhooks.
+ */
+const PUBLIC_LIMITERS = {
+  ltiLogin: createRateLimiter(30, MINUTE),
+  ltiLaunch: createRateLimiter(30, MINUTE),
+  webhook: createRateLimiter(120, MINUTE),
+} as const
+
+export function withinPublicLimit(kind: keyof typeof PUBLIC_LIMITERS, request: Request): boolean {
+  if (rateLimitsDisabledForTests()) return true
+  return PUBLIC_LIMITERS[kind].allow(clientIp(request.headers))
+}

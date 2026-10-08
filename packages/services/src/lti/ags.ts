@@ -5,7 +5,7 @@
  */
 import { randomBytes } from 'node:crypto'
 import { SignJWT } from 'jose'
-import { dueLtiScores, getPlatform, markLtiScoreFailed, markLtiScoreSent, type Db, type DueScore, type LtiPlatform } from '@challengeforge/db'
+import { claimLtiScore, dueLtiScores, getPlatform, markLtiScoreFailed, markLtiScoreSent, type Db, type DueScore, type LtiPlatform } from '@challengeforge/db'
 import { OUTBOUND_TIMEOUT_MS, type FetchLike } from '../payments/types'
 import { AGS_SCORE_SCOPE } from './claims'
 import { ensureToolKey, LTI_ALG } from './keys'
@@ -76,6 +76,8 @@ export async function sendDueLtiScores(db: Db, secret: string, options: { fetchI
   let sent = 0
   let failed = 0
   for (const score of await dueLtiScores(db, options.limit ?? BATCH, now)) {
+    // Another run (overlapping cron) may be sending this one already.
+    if (!(await claimLtiScore(db, score, now))) continue
     try {
       const platform = await getPlatform(db, score.siteId, score.platformId)
       if (!platform) throw new Error('Platform no longer registered.')
@@ -88,8 +90,9 @@ export async function sendDueLtiScores(db: Db, secret: string, options: { fetchI
       await markLtiScoreSent(db, score)
       sent += 1
     } catch (err) {
-      await markLtiScoreFailed(db, score, err instanceof Error ? err.message : 'Unknown error', now)
       failed += 1
+      // Recording the failure must not stop the rest of the batch; the claim expires and it is retried.
+      await markLtiScoreFailed(db, score, err instanceof Error ? err.message : 'Unknown error', now).catch(() => undefined)
     }
   }
   return { sent, failed }

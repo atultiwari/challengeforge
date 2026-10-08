@@ -95,6 +95,8 @@ export async function verifyLaunch(
       issuer: platform.issuer,
       audience: platform.clientId,
       algorithms: [LTI_ALG],
+      // jose checks exp/iat only when present: LTI requires them, so require them.
+      requiredClaims: ['exp', 'iat', 'nonce', 'sub'],
       clockTolerance: 60,
       ...(options.now ? { currentDate: options.now } : {}),
     })

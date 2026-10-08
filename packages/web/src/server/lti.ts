@@ -44,7 +44,7 @@ export function ltiError(message: string, status = 400): Response {
 }
 
 /** Reads a string from a form or query, bounded; empty means absent. */
-export function field(source: FormData | URLSearchParams, name: string, max = 4096): string | undefined {
+export function field(source: URLSearchParams, name: string, max = 4096): string | undefined {
   const v = source.get(name)
   return typeof v === 'string' && v !== '' && v.length <= max ? v : undefined
 }

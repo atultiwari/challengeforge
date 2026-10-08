@@ -101,6 +101,25 @@ export async function dueLtiScores(db: Db, limit: number, now: Date = new Date()
   )
 }
 
+/** How long a claimed score is hidden from other runs while it is being sent. */
+const CLAIM_MS = 10 * 60_000
+
+/**
+ * Claims a due score for this run (two overlapping cron runs must not both
+ * send it). Returns false when another run got there first.
+ */
+export async function claimLtiScore(db: Db, score: DueScore, now: Date = new Date()): Promise<boolean> {
+  const result = await db
+    .updateTable('lti_score_outbox')
+    .set({ next_attempt_at: new Date(now.getTime() + CLAIM_MS) })
+    .where('id', '=', score.id)
+    .where('status', '=', 'pending')
+    .where('next_attempt_at', '<=', now)
+    .where('updated_at', '=', score.version)
+    .executeTakeFirst()
+  return Number(result.numUpdatedRows) === 1
+}
+
 export async function markLtiScoreSent(db: Db, score: DueScore): Promise<void> {
   await db.updateTable('lti_score_outbox').set({ status: 'sent', last_error: null }).where('id', '=', score.id).where('updated_at', '=', score.version).execute()
 }

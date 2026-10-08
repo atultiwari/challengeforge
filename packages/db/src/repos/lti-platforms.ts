@@ -19,27 +19,47 @@ export interface LtiPlatform {
   jwksUrl: string
   deploymentIds: string[]
   active: boolean
+  /** Course placements on this LMS open restricted packs for the learners they launch. */
+  grantsAccess: boolean
 }
 
-export type LtiPlatformInput = Omit<LtiPlatform, 'id' | 'active'>
+export type LtiPlatformInput = Omit<LtiPlatform, 'id' | 'active' | 'grantsAccess'>
 
 const MAX_DEPLOYMENTS = 20
 
-/** HTTPS only, except a development platform on localhost. */
-function checkUrl(label: string, value: string): string {
-  let url: URL
-  try {
-    url = new URL(value.trim())
-  } catch {
-    throw new ValidationError(`${label} is not a valid URL.`)
-  }
-  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
-  if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) throw new ValidationError(`${label} must use https.`)
-  if (url.href.length > 500) throw new ValidationError(`${label} is too long.`)
-  return url.href
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+
+/** Private, loopback and link-local IP literals: an outbound call there would probe the server's own network. */
+function isPrivateAddress(host: string): boolean {
+  const h = host.replace(/^\[|\]$/g, '').toLowerCase()
+  if (h === '::1' || h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true
+  const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h)
+  if (!m) return false
+  const [a, b] = [Number(m[1]), Number(m[2])]
+  return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)
 }
 
-type Row = { id: string; name: string; issuer: string; client_id: string; auth_login_url: string; auth_token_url: string; jwks_url: string; deployment_ids: unknown; active: number | boolean }
+/**
+ * True for a URL this server may call: https to a public host. Plain http to
+ * localhost is allowed only outside production (development LMS simulators).
+ */
+export function isAllowedOutboundUrl(value: string, production = process.env['NODE_ENV'] === 'production'): boolean {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return false
+  }
+  if (LOCAL_HOSTS.has(url.hostname)) return !production && (url.protocol === 'http:' || url.protocol === 'https:')
+  return url.protocol === 'https:' && !isPrivateAddress(url.hostname) && url.href.length <= 500
+}
+
+function checkUrl(label: string, value: string): string {
+  if (!isAllowedOutboundUrl(value.trim())) throw new ValidationError(`${label} must be an https address on the public internet.`)
+  return new URL(value.trim()).href
+}
+
+type Row = { id: string; name: string; issuer: string; client_id: string; auth_login_url: string; auth_token_url: string; jwks_url: string; deployment_ids: unknown; active: number | boolean; grants_access: number | boolean }
 
 const toPlatform = (r: Row): LtiPlatform => ({
   id: r.id,
@@ -51,9 +71,10 @@ const toPlatform = (r: Row): LtiPlatform => ({
   jwksUrl: r.jwks_url,
   deploymentIds: fromJson<string[]>(r.deployment_ids),
   active: toBool(r.active),
+  grantsAccess: toBool(r.grants_access),
 })
 
-const COLUMNS = ['id', 'name', 'issuer', 'client_id', 'auth_login_url', 'auth_token_url', 'jwks_url', 'deployment_ids', 'active'] as const
+const COLUMNS = ['id', 'name', 'issuer', 'client_id', 'auth_login_url', 'auth_token_url', 'jwks_url', 'deployment_ids', 'active', 'grants_access'] as const
 
 /** Registers a platform, or updates the one with the same issuer and client id. Admins only. */
 export async function savePlatform(db: Db, scope: Scope, input: LtiPlatformInput): Promise<LtiPlatform> {
@@ -95,6 +116,16 @@ export async function setPlatformActive(db: Db, scope: Scope, platformId: string
     const result = await trx.updateTable('lti_platforms').set({ active }).where('id', '=', platformId).where('site_id', '=', scope.siteId).executeTakeFirst()
     if (Number(result.numUpdatedRows) === 0) throw new NotFoundError('Platform not found.')
     await recordAudit(trx, scope, { action: active ? 'lti.platform_saved' : 'lti.platform_removed', targetType: 'lti_platform', targetId: platformId, details: { active } })
+  })
+}
+
+/** Whether this LMS's course placements may open restricted (e.g. paid) packs. Off by default. */
+export async function setPlatformGrantsAccess(db: Db, scope: Scope, platformId: string, grantsAccess: boolean): Promise<void> {
+  requireRole(scope, 'admin')
+  await db.transaction().execute(async (trx) => {
+    const result = await trx.updateTable('lti_platforms').set({ grants_access: grantsAccess }).where('id', '=', platformId).where('site_id', '=', scope.siteId).executeTakeFirst()
+    if (Number(result.numUpdatedRows) === 0) throw new NotFoundError('Platform not found.')
+    await recordAudit(trx, scope, { action: 'lti.platform_saved', targetType: 'lti_platform', targetId: platformId, details: { grantsAccess } })
   })
 }
 

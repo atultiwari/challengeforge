@@ -20,16 +20,51 @@ review in one pass.
 | Q7 | LTI 1.3 | **Done.** Login, launch verification (platform JWKS, issuer, audience and authorised party, nonce, expiry, version, deployment), a single-use state plus a state cookie, **Deep Linking 2.0** and **AGS grade passback** through a retrying outbox. LMS users are linked by (platform, sub), never by email. E2E runs against a **simulated LMS**: register, deep link, launch, play, and the grade reaches the LMS grade book. A forged launch is refused. |
 
 **Tests:**
-- 458 unit tests.
-- **118 database tests on each engine:** MySQL 8.0 and MariaDB 11.8 locally; CI adds MariaDB 10.11.
+- 464 unit tests.
+- **125 database tests on each engine:** MySQL 8.0 and MariaDB 11.8 locally; CI adds MariaDB 10.11.
 - **15 Playwright E2E tests**, now run against MariaDB 11.8 in CI.
 
 ## Reviews at the phase boundary
 
-Security and code reviews of the whole Phase 3 range are recorded below,
-together with the fixes they led to.
+Two independent reviews covered the whole Phase 3 range: security, and code
+quality and correctness. **No critical findings.** Everything rated high or
+medium was fixed, with tests.
 
-_(Filled in when the reviews complete.)_
+**Payments**
+- A webhook that arrived before checkout had stored the provider's id was marked as seen, so it was lost for good. It is now matched by our own payment id; otherwise it is rolled back and answered 503 so the provider retries.
+- A paid event must now state its amount and currency, and they must match our price.
+- Only two-decimal currencies are offered.
+
+**Cohorts and access**
+- A removed or demoted instructor kept running cohorts. Their cohort roles are now dropped, and access re-checks their organisation role.
+- Instructors could assign paid packs to their cohorts, giving them away. Only editors and admins can assign restricted content now.
+- Duplicate assignments are refused by unique keys.
+- Roles and access granted by email now need a confirmed address when the site sends mail, which closes email squatting.
+
+**Results**
+- A failure while issuing a certificate or queueing an LMS grade could roll back the learner's result. These steps can no longer do that (a test hides a table to prove it).
+- Results waiting for review counted as passes and scores. Now they don't, and a reviewed result counts as full or no credit.
+- If the last two challenges finished at the same moment, the certificate could be missed. A per-learner lock and a locking read fix that.
+- Two reviewers could both override the same result. The second now finds nothing waiting.
+
+**Instructor review**
+- Permission checks and the review queue are now a single SQL query. They are fast, and the queue can no longer be crowded out by the 500-row cap.
+
+**LTI**
+- **Rate limits:** login, launch and payment webhooks are rate-limited per address.
+- **Request bodies:** they are read through a streaming size cap; a chunked request had none. The same cap now covers every JSON route.
+- **Error text:** errors sent by the LMS are never echoed back.
+- **JWT claims:** `exp`, `iat`, `nonce` and `sub` are now required.
+- **Outbound URLs:** they must be public https; localhost is allowed only in development.
+- **Restricted packs:** course placements open them only on LMSs an admin trusts with that. LTI grants now expire, and a revoked one stays revoked.
+- **Score outbox:** each row is claimed before sending, so overlapping cron runs cannot double-send, and one failure no longer stops the rest of the batch.
+- **Deep linking:** the response is signed before the request is spent.
+
+**Smaller fixes**
+- Archiving and its audit row are now atomic.
+- A failed audit write can no longer fail a password reset.
+- Analytics are capped per challenge and say when they are truncated. The miss-rate bars no longer need inline styles, which the production CSP blocks.
+- `attempts.ts` was split: result recording now lives in `results.ts`.
 
 ## Found and fixed along the way
 

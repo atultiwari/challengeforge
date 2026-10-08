@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify, SignJWT, type CryptoKey, type JWK } from 'jose'
 import {
+  claimLtiScore,
+  dueLtiScores,
+  grantFromSource,
+  isAllowedOutboundUrl,
+  upsertPack,
   createChallenge,
   createLtiTicket,
   linkLtiUser,
@@ -100,6 +105,29 @@ describe('platform registration', () => {
     await expect(savePlatform(t.db, s.admin, { ...base, deploymentIds: [' '] })).rejects.toMatchObject({ code: 'invalid' })
     await expect(savePlatform(t.db, s.author, base)).rejects.toMatchObject({ code: 'forbidden' })
     expect((await savePlatform(t.db, s.admin, { ...base, jwksUrl: 'http://localhost:3299/jwks' })).jwksUrl).toBe('http://localhost:3299/jwks')
+  })
+})
+
+describe('outbound URL policy (review)', () => {
+  it('allows public https only; localhost http only outside production; never private addresses', () => {
+    expect(isAllowedOutboundUrl('https://lms.example.test/jwks', true)).toBe(true)
+    expect(isAllowedOutboundUrl('http://lms.example.test/jwks', true)).toBe(false)
+    expect(isAllowedOutboundUrl('http://localhost:3299/jwks', false)).toBe(true)
+    expect(isAllowedOutboundUrl('http://localhost:3299/jwks', true)).toBe(false)
+    for (const host of ['10.0.0.5', '192.168.1.1', '172.20.0.1', '169.254.169.254', '127.0.0.1', '[::1]', '100.64.0.1']) {
+      expect({ host, ok: isAllowedOutboundUrl(`https://${host}/x`, true) }).toEqual({ host, ok: false })
+    }
+    expect(isAllowedOutboundUrl('not a url', false)).toBe(false)
+  })
+
+  it('an LTI grant an admin revoked stays revoked when the next launch comes in', async () => {
+    const packId = await upsertPack(t.db, s.admin, { slug: 'lti-pack', title: 'LTI pack', description: '' })
+    const userId = await linkLtiUser(t.db, s.site.id, platform.id, 'lms-grant-user', 'Grant User')
+    await grantFromSource(t.db, s.site.id, userId, packId, 'lti', 'p:course', new Date(Date.now() + 60_000), { revive: false })
+    await t.db.updateTable('access_grants').set({ revoked_at: new Date() }).where('user_id', '=', userId).execute()
+    await grantFromSource(t.db, s.site.id, userId, packId, 'lti', 'p:course', new Date(Date.now() + 120_000), { revive: false })
+    const row = await t.db.selectFrom('access_grants').select('revoked_at').where('user_id', '=', userId).executeTakeFirstOrThrow()
+    expect(row.revoked_at).not.toBeNull()
   })
 })
 
@@ -224,6 +252,19 @@ describe('grade passback', () => {
     expect(scoreCall.headers['authorization']).toBe('Bearer lms-token')
     expect(JSON.parse(scoreCall.body)).toMatchObject({ userId: 'lms-user-1', scoreGiven: 100, scoreMaximum: 100, activityProgress: 'Completed', gradingProgress: 'FullyGraded' })
     expect(await sendDueLtiScores(t.db, SECRET, { fetchImpl: lms })).toEqual({ sent: 0, failed: 0 })
+  })
+
+  it('only one run can claim a due score', async () => {
+    const userId = await linkLtiUser(t.db, s.site.id, platform.id, 'lms-user-claim', 'Claimer')
+    const { linkId } = await upsertLtiLink(t.db, { siteId: s.site.id, platformId: platform.id, deploymentId: 'dep-1', resourceLinkId: 'rl-1', contextId: null, contextTitle: null, challengeId, lineitemUrl: null })
+    await recordLinkUser(t.db, linkId, userId, 'lms-user-claim')
+    const learner: Scope = { siteId: s.site.id, principal: { userId, role: 'learner' } }
+    const { attemptId } = await startOrResume(t.db, learner, { registry }, challengeId)
+    await performAction(t.db, learner, { registry }, attemptId, { kind: 'submit', payload: { answer: 'b' } })
+    const due = (await dueLtiScores(t.db, 50)).find((d) => d.sub === 'lms-user-claim')!
+    expect(await claimLtiScore(t.db, due)).toBe(true)
+    expect(await claimLtiScore(t.db, due)).toBe(false)
+    expect((await dueLtiScores(t.db, 50)).some((d) => d.sub === 'lms-user-claim')).toBe(false)
   })
 
   it('a refused score backs off and is retried later, not immediately', async () => {

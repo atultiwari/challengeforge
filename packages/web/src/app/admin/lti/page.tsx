@@ -55,6 +55,12 @@ export default async function LtiAdminPage() {
                   <span className="text-sm text-ink-muted">{p.issuer} · client {p.clientId} · {p.deploymentIds.length} deployment{p.deploymentIds.length === 1 ? '' : 's'}</span>
                 </span>
                 <span className={`pill ${p.active ? 'bg-good-soft text-good' : 'bg-surface-sunken text-ink-muted'}`}>{p.active ? 'active' : 'off'}</span>
+                <PostButton
+                  url={`/api/admin/lti/platforms/${p.id}`}
+                  body={{ grantsAccess: !p.grantsAccess }}
+                  label={p.grantsAccess ? 'Placements open restricted packs (stop)' : 'Let placements open restricted packs'}
+                  {...(p.grantsAccess ? {} : { confirm: 'Any teacher on this LMS will be able to give their class access to restricted (including paid) packs. Continue?' })}
+                />
                 <PostButton url={`/api/admin/lti/platforms/${p.id}`} body={{ active: !p.active }} label={p.active ? 'Turn off' : 'Turn on'} />
               </li>
             ))}

@@ -36,9 +36,14 @@ function createAuth() {
       ...(mail.enabled
         ? { sendResetPassword: async ({ user, url }) => sendInBackground(passwordResetMessage(user.email, user.name, url), 'a password reset') }
         : {}),
+      // The password has already changed: a failed audit write is logged, never turned into an error for the user.
       onPasswordReset: async ({ user }) => {
-        const site = await findSiteBySlug(db(), config.SITE_SLUG)
-        if (site) await recordAudit(db(), { siteId: site.id, principal: { userId: user.id, role: 'learner' } }, { action: 'account.password_reset', targetType: 'user', targetId: user.id })
+        try {
+          const site = await findSiteBySlug(db(), config.SITE_SLUG)
+          if (site) await recordAudit(db(), { siteId: site.id, principal: { userId: user.id, role: 'learner' } }, { action: 'account.password_reset', targetType: 'user', targetId: user.id })
+        } catch (cause) {
+          console.error('[auth] could not audit a password reset', cause)
+        }
       },
     },
     ...(mail.enabled

@@ -2,10 +2,12 @@ import { LtiLaunchError, startLogin } from '@challengeforge/services'
 import { db } from '@/server/db'
 import { env } from '@/server/env'
 import { field, ltiError, stateCookie } from '@/server/lti'
+import { readTextCapped } from '@/server/http'
 import { currentSite } from '@/server/scope'
+import { withinPublicLimit } from '@/server/limits'
 
 /** OIDC third-party-initiated login: the LMS calls this first (GET or POST). */
-async function handle(params: FormData | URLSearchParams): Promise<Response> {
+async function handle(params: URLSearchParams): Promise<Response> {
   const iss = field(params, 'iss', 255)
   const loginHint = field(params, 'login_hint')
   const target = field(params, 'target_link_uri', 2048)
@@ -28,10 +30,16 @@ async function handle(params: FormData | URLSearchParams): Promise<Response> {
   }
 }
 
+const TOO_MANY = () => ltiError('Too many requests. Wait a minute and open the activity again.', 429)
+
 export async function GET(request: Request) {
+  if (!withinPublicLimit('ltiLogin', request)) return TOO_MANY()
   return handle(new URL(request.url).searchParams)
 }
 
 export async function POST(request: Request) {
-  return handle(await request.formData())
+  if (!withinPublicLimit('ltiLogin', request)) return TOO_MANY()
+  const body = await readTextCapped(request, 16 * 1024)
+  if (body === null) return ltiError('The login request is too large.', 413)
+  return handle(new URLSearchParams(body))
 }

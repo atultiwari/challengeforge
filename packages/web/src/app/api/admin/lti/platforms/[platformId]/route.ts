@@ -1,4 +1,4 @@
-import { setPlatformActive } from '@challengeforge/db'
+import { setPlatformActive, setPlatformGrantsAccess } from '@challengeforge/db'
 import { db } from '@/server/db'
 import { optionalBool } from '@/server/body'
 import { fail, ok } from '@/server/http'
@@ -8,8 +8,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ platformId
   const { platformId } = await ctx.params
   return mutation(request, async ({ scope, body }) => {
     const active = optionalBool(body, 'active')
-    if (active === undefined) return fail(400, 'bad_request', 'Say whether the platform is active.')
-    await setPlatformActive(db(), scope, platformId, active)
-    return ok({ active })
+    const grantsAccess = optionalBool(body, 'grantsAccess')
+    if (active === undefined && grantsAccess === undefined) return fail(400, 'bad_request', 'Nothing to change.')
+    if (active !== undefined) await setPlatformActive(db(), scope, platformId, active)
+    if (grantsAccess !== undefined) await setPlatformGrantsAccess(db(), scope, platformId, grantsAccess)
+    return ok({ active, grantsAccess })
   })
 }

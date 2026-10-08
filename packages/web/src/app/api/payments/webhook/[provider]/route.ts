@@ -1,7 +1,8 @@
 import { applyPaymentEvent, PaymentNotFoundYetError } from '@challengeforge/db'
 import { WebhookSignatureError } from '@challengeforge/services'
 import { db } from '@/server/db'
-import { fail, ok } from '@/server/http'
+import { fail, ok, readTextCapped } from '@/server/http'
+import { withinPublicLimit } from '@/server/limits'
 import { paymentProvider } from '@/server/payments'
 
 const MAX_WEBHOOK_BYTES = 256 * 1024
@@ -14,10 +15,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ provider: 
   const { provider: name } = await ctx.params
   const provider = paymentProvider()
   if (!provider || provider.id !== name || provider.id === 'mock') return fail(404, 'not_found', 'Not found.')
-  const declared = Number(request.headers.get('content-length') ?? 0)
-  if (declared > MAX_WEBHOOK_BYTES) return fail(413, 'too_large', 'Too large.')
-  const raw = await request.text()
-  if (raw.length > MAX_WEBHOOK_BYTES) return fail(413, 'too_large', 'Too large.')
+  if (!withinPublicLimit('webhook', request)) return fail(429, 'rate_limited', 'Too many requests.')
+  const raw = await readTextCapped(request, MAX_WEBHOOK_BYTES)
+  if (raw === null) return fail(413, 'too_large', 'Too large.')
   let event
   try {
     event = provider.verifyWebhook(raw, request.headers)

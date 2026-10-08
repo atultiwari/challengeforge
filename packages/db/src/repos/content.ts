@@ -216,14 +216,16 @@ export async function publish(db: Db, scope: Scope, challengeId: string): Promis
 
 export async function archive(db: Db, scope: Scope, challengeId: string): Promise<void> {
   requireRole(scope, 'editor')
-  const result = await db
-    .updateTable('challenges')
-    .set({ status: 'archived', updated_at: new Date() })
-    .where('id', '=', challengeId)
-    .where('site_id', '=', scope.siteId)
-    .executeTakeFirst()
-  if (Number(result.numUpdatedRows) === 0) throw new NotFoundError('Challenge not found.')
-  await recordAudit(db, scope, { action: 'challenge.archived', targetType: 'challenge', targetId: challengeId }, 'cli')
+  await db.transaction().execute(async (trx) => {
+    const result = await trx
+      .updateTable('challenges')
+      .set({ status: 'archived', updated_at: new Date() })
+      .where('id', '=', challengeId)
+      .where('site_id', '=', scope.siteId)
+      .executeTakeFirst()
+    if (Number(result.numUpdatedRows) === 0) throw new NotFoundError('Challenge not found.')
+    await recordAudit(trx, scope, { action: 'challenge.archived', targetType: 'challenge', targetId: challengeId }, 'cli')
+  })
 }
 
 const summaryColumns = [

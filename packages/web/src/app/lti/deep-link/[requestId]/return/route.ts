@@ -24,9 +24,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ requestId:
   const items = (await listPlayable(db(), scope)).filter((c) => chosen.has(c.id)).slice(0, MAX_ITEMS).map((c) => ({ id: c.id, title: c.title }))
   const platform = await getPlatform(db(), scope.siteId, pending.platformId)
   if (!platform || !platform.active) return ltiError('This LMS is no longer registered with this site.')
-  if (!(await consumeDeepLinkRequest(db(), requestId))) return ltiError('This request was already used. Start again from your course.', 409)
+  // Sign first, then spend the request: a signing failure must not force the teacher to start over.
   const key = await ensureToolKey(db(), scope.siteId, ltiSecret())
   const jwt = await deepLinkResponse(key, platform, { deploymentId: pending.deploymentId, data: pending.data, appUrl: env().APP_URL, items, scoreMaximum: SCORE_MAXIMUM })
+  if (!(await consumeDeepLinkRequest(db(), requestId))) return ltiError('This request was already used. Start again from your course.', 409)
   const target = new URL(pending.returnUrl)
   const body = `<h1>${items.length === 0 ? 'Nothing chosen' : `Adding ${items.length} activit${items.length === 1 ? 'y' : 'ies'}`}</h1>
 <form method="post" action="${escapeHtml(target.href)}"><input type="hidden" name="JWT" value="${escapeHtml(jwt)}"><button type="submit">Return to your course</button></form>`

@@ -4,8 +4,9 @@ import {
   createLtiTicket,
   getPlayable,
   grantFromSource,
+  isAllowedOutboundUrl,
   linkLtiUser,
-  listPacks,
+  packAccessMode,
   recordLinkUser,
   upsertLtiLink,
   ValidationError,
@@ -15,8 +16,12 @@ import { db } from '@/server/db'
 import { env } from '@/server/env'
 import { clearStateCookie, escapeHtml, field, LTI_STATE_COOKIE, ltiError, ltiPage, ticketCookie } from '@/server/lti'
 import { currentSite } from '@/server/scope'
+import { readTextCapped } from '@/server/http'
+import { withinPublicLimit } from '@/server/limits'
 
 const MAX_FORM_BYTES = 64 * 1024
+/** A course placement keeps a restricted pack open this long after each launch. */
+const LTI_GRANT_MS = 180 * 24 * 60 * 60_000
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** The challenge a resource link launches: the custom parameter, else our own /play/<id> target. */
@@ -48,6 +53,7 @@ async function resourceLaunch(siteId: string, launch: VerifiedLaunch, userId: st
   const requested = challengeOf(launch)
   if (!requested) throw new LtiLaunchError('bad_claims', 'This LMS link does not point at a challenge on this site.')
   const ags = p[CLAIM.ags]
+  const lineitem = ags?.scope.includes(AGS_SCORE_SCOPE) ? (ags.lineitem ?? null) : null
   const { linkId, challengeId } = await upsertLtiLink(db(), {
     siteId,
     platformId: launch.platform.id,
@@ -56,14 +62,16 @@ async function resourceLaunch(siteId: string, launch: VerifiedLaunch, userId: st
     contextId: p[CLAIM.context]?.id ?? null,
     contextTitle: p[CLAIM.context]?.title ?? null,
     challengeId: requested,
-    lineitemUrl: ags?.scope.includes(AGS_SCORE_SCOPE) ? (ags.lineitem ?? null) : null,
+    // The grade book URL is where this server will send a bearer token: public https only.
+    lineitemUrl: lineitem && isAllowedOutboundUrl(lineitem) ? lineitem : null,
   })
   await recordLinkUser(db(), linkId, userId, p.sub)
-  // A course placement opens a restricted pack for the people it launches.
-  const scope = { siteId, principal: { userId, role: 'learner' as const } }
-  const challenge = await getPlayable(db(), scope, challengeId)
-  if (challenge.packId && (await listPacks(db(), scope)).some((pk) => pk.id === challenge.packId && pk.access === 'restricted')) {
-    await grantFromSource(db(), siteId, userId, challenge.packId, 'lti', `${launch.platform.id.slice(0, 8)}:${p[CLAIM.context]?.id ?? link.id}`)
+  // A course placement opens a restricted pack only on an LMS the admin trusts with that (off by default).
+  // The grant expires unless launches keep renewing it, and one an admin revoked stays revoked.
+  const challenge = await getPlayable(db(), { siteId, principal: { userId, role: 'learner' } }, challengeId)
+  if (launch.platform.grantsAccess && challenge.packId && (await packAccessMode(db(), siteId, challenge.packId)) === 'restricted') {
+    const ref = `${launch.platform.id.slice(0, 8)}:${p[CLAIM.context]?.id ?? link.id}`
+    await grantFromSource(db(), siteId, userId, challenge.packId, 'lti', ref, new Date(Date.now() + LTI_GRANT_MS), { revive: false })
   }
   return `/play/${challengeId}`
 }
@@ -82,10 +90,12 @@ async function deepLinkingLaunch(siteId: string, launch: VerifiedLaunch, userId:
 
 /** The LMS posts the signed id_token here (form_post). Only a fully verified launch signs anyone in. */
 export async function POST(request: Request) {
-  if (Number(request.headers.get('content-length') ?? 0) > MAX_FORM_BYTES) return ltiError('The launch request is too large.', 413)
-  const form = await request.formData()
-  const platformError = field(form, 'error', 200)
-  if (platformError) return ltiError(`The LMS reported a problem: ${platformError}.`)
+  if (!withinPublicLimit('ltiLaunch', request)) return ltiError('Too many requests. Wait a minute and open the activity again.', 429)
+  const body = await readTextCapped(request, MAX_FORM_BYTES)
+  if (body === null) return ltiError('The launch request is too large.', 413)
+  const form = new URLSearchParams(body)
+  // Never echo the platform's text: anyone can post here, and our page must not say what they choose.
+  if (field(form, 'error', 200)) return ltiError('The LMS could not complete the launch. Open the activity again from your course.')
   const idToken = field(form, 'id_token', 32_768)
   const state = field(form, 'state', 64)
   if (!idToken || !state) return ltiError('The launch is missing its token.')

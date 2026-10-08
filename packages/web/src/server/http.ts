@@ -38,12 +38,32 @@ export function toResponse(err: unknown): Response {
 }
 
 /** Reads a JSON body with a size cap; returns null when it is missing, too big or malformed. */
+/**
+ * Reads a request body as text, STOPPING once it passes `maxBytes` (a chunked
+ * body has no Content-Length to refuse early). Null when too big or absent.
+ */
+export async function readTextCapped(request: Request, maxBytes: number): Promise<string | null> {
+  if (Number(request.headers.get('content-length') ?? '0') > maxBytes) return null
+  if (!request.body) return ''
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => undefined)
+      return null
+    }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
 export async function readJson(request: Request, maxBytes = 64 * 1024): Promise<unknown> {
-  // Refuse early on a declared size, then check the actual bytes received.
-  const declared = Number(request.headers.get('content-length') ?? '0')
-  if (declared > maxBytes) return null
-  const text = await request.text()
-  if (text.length === 0 || Buffer.byteLength(text, 'utf8') > maxBytes) return null
+  const text = await readTextCapped(request, maxBytes)
+  if (!text) return null
   try {
     return JSON.parse(text) as unknown
   } catch {

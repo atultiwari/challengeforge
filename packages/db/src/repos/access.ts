@@ -78,6 +78,12 @@ export async function canPlay(db: Db, scope: Scope, challengeId: string, now: Da
   return assigned.packs.has(row.packId) || assigned.challenges.has(challengeId)
 }
 
+/** @internal: a pack's access mode, or null if it is not on this site. */
+export async function packAccessMode(db: Db, siteId: string, packId: string): Promise<PackAccess | null> {
+  const row = await db.selectFrom('packs').select('access').where('id', '=', packId).where('site_id', '=', siteId).executeTakeFirst()
+  return row?.access ?? null
+}
+
 /** True when the caller can play the whole pack (open, editor, a live grant, or a cohort assigned the pack). */
 export async function canPlayPack(db: Db, scope: Scope, packId: string, now: Date = new Date()): Promise<boolean> {
   const pack = await db.selectFrom('packs').select('access').where('id', '=', packId).where('site_id', '=', scope.siteId).executeTakeFirst()
@@ -133,14 +139,37 @@ export async function setPackAccess(db: Db, scope: Scope, packId: string, access
 
 /**
  * Records a grant from a payment or an LTI launch (no permission check: the
- * caller has already verified the payment or the launch). Re-granting the
- * same source re-activates it.
+ * caller has already verified the payment or the launch). A payment that is
+ * applied again re-activates its grant; with `revive: false` (LTI launches)
+ * a grant an admin revoked STAYS revoked, and only a live one is extended.
  */
-export async function grantFromSource(trx: Db, siteId: string, userId: string, packId: string, source: GrantSource, sourceRef: string, expiresAt: Date | null = null): Promise<void> {
+export async function grantFromSource(
+  trx: Db,
+  siteId: string,
+  userId: string,
+  packId: string,
+  source: GrantSource,
+  sourceRef: string,
+  expiresAt: Date | null = null,
+  options: { revive?: boolean } = {},
+): Promise<void> {
+  const ref = sourceRef.slice(0, 64)
+  const values = { id: newId(), site_id: siteId, user_id: userId, pack_id: packId, source, source_ref: ref, expires_at: expiresAt, revoked_at: null, created_at: new Date() }
+  if (options.revive !== false) {
+    await trx.insertInto('access_grants').values(values).onDuplicateKeyUpdate({ revoked_at: null, expires_at: expiresAt }).execute()
+    return
+  }
+  const inserted = await trx.insertInto('access_grants').values(values).ignore().executeTakeFirst()
+  if (Number(inserted.numInsertedOrUpdatedRows ?? 0) > 0) return
   await trx
-    .insertInto('access_grants')
-    .values({ id: newId(), site_id: siteId, user_id: userId, pack_id: packId, source, source_ref: sourceRef.slice(0, 64), expires_at: expiresAt, revoked_at: null, created_at: new Date() })
-    .onDuplicateKeyUpdate({ revoked_at: null, expires_at: expiresAt })
+    .updateTable('access_grants')
+    .set({ expires_at: expiresAt })
+    .where('site_id', '=', siteId)
+    .where('user_id', '=', userId)
+    .where('pack_id', '=', packId)
+    .where('source', '=', source)
+    .where('source_ref', '=', ref)
+    .where('revoked_at', 'is', null)
     .execute()
 }
 
