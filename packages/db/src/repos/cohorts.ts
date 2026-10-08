@@ -5,6 +5,7 @@
  * of their organisation; an instructor manages the cohorts they teach.
  */
 import { randomInt } from 'node:crypto'
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { newId } from '../ids'
 import { toBool } from '../json'
@@ -98,7 +99,7 @@ export async function createCohort(db: Db, scope: Scope, orgId: string, name: st
   const now = new Date()
   for (let tries = 0; ; tries += 1) {
     try {
-      await db.transaction().execute(async (trx) => {
+      await transact(db, async (trx) => {
         await trx
           .insertInto('cohorts')
           .values({ id, site_id: scope.siteId, org_id: orgId, name: clean, join_code: newJoinCode(), joining_open: true, archived: false, created_by: p.userId, created_at: now })
@@ -126,7 +127,7 @@ export async function updateCohort(db: Db, scope: Scope, cohortId: string, updat
   await requireCohortManager(db, scope, cohortId)
   const name = update.name?.trim()
   if (name !== undefined && (name === '' || name.length > 200)) throw new ValidationError('Give the cohort a name (up to 200 characters).')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     await trx
       .updateTable('cohorts')
       .set({
@@ -150,7 +151,7 @@ export async function joinCohort(db: Db, scope: Scope, code: string): Promise<Co
   // One message for "no such code" and "closed", so codes cannot be probed.
   if (!row || !toBool(row.joining_open) || toBool(row.archived)) throw new ValidationError('That code is not valid, or the cohort is not taking new people.')
   const now = new Date()
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const joined = await trx
       .insertInto('cohort_members')
       .values({ cohort_id: row.id, user_id: p.userId, site_id: scope.siteId, role: 'learner', joined_at: now })
@@ -216,7 +217,7 @@ export async function listCohortMembers(db: Db, scope: Scope, cohortId: string):
 export async function removeCohortMember(db: Db, scope: Scope, cohortId: string, userId: string): Promise<void> {
   await requireCohortManager(db, scope, cohortId)
   if (userId === scope.principal?.userId) throw new ValidationError('You cannot remove yourself from a cohort you teach.')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const result = await trx.deleteFrom('cohort_members').where('cohort_id', '=', cohortId).where('user_id', '=', userId).executeTakeFirst()
     if (Number(result.numDeletedRows) > 0) await recordAudit(trx, scope, { action: 'cohort.member_removed', targetType: 'cohort', targetId: cohortId, details: { userId } })
   })

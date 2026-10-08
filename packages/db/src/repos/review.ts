@@ -6,6 +6,7 @@
  * from all their results, so an overturned pass really is undone.
  */
 import { sql } from 'kysely'
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { toBool } from '../json'
 import { ForbiddenError, NotFoundError, hasRole, requireSignedIn, type Scope } from '../scope'
@@ -80,7 +81,7 @@ export async function overrideAssessment(db: Db, scope: Scope, attemptId: string
     throw new NotFoundError('No result is waiting for review here.')
   }
   const points = Math.max(0, Math.round(override.points))
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const now = new Date()
     const decided = await trx
       .updateTable('assessments')

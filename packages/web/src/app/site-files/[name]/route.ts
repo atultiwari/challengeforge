@@ -15,6 +15,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ name: stri
       headers: {
         'content-type': file.contentType,
         'cache-control': 'public, max-age=300',
+        // One app serves several sites: a shared cache must keep each host's logo apart.
+        vary: 'Host',
         etag: `"${file.sha256}"`,
         'x-content-type-options': 'nosniff',
         'content-security-policy': "default-src 'none'; sandbox",

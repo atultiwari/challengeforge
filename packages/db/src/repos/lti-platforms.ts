@@ -3,6 +3,7 @@
  * An admin registers each LMS once: its issuer, our client id there, its
  * login, token and key URLs, and the deployment ids it may launch from.
  */
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { newId } from '../ids'
 import { fromJson, toBool, toJson } from '../json'
@@ -98,7 +99,7 @@ export async function savePlatform(db: Db, scope: Scope, input: LtiPlatformInput
     jwks_url: checkUrl('The keyset URL', input.jwksUrl),
     deployment_ids: toJson(deploymentIds),
   }
-  const id = await db.transaction().execute(async (trx) => {
+  const id = await transact(db, async (trx) => {
     const existing = await trx.selectFrom('lti_platforms').select('id').where('site_id', '=', scope.siteId).where('issuer', '=', issuer).where('client_id', '=', clientId).executeTakeFirst()
     const platformId = existing?.id ?? newId()
     if (existing) await trx.updateTable('lti_platforms').set({ ...values, active: true }).where('id', '=', platformId).execute()
@@ -112,7 +113,7 @@ export async function savePlatform(db: Db, scope: Scope, input: LtiPlatformInput
 /** Switching a platform off refuses its launches; its users and links stay. */
 export async function setPlatformActive(db: Db, scope: Scope, platformId: string, active: boolean): Promise<void> {
   requireRole(scope, 'admin')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const result = await trx.updateTable('lti_platforms').set({ active }).where('id', '=', platformId).where('site_id', '=', scope.siteId).executeTakeFirst()
     if (Number(result.numUpdatedRows) === 0) throw new NotFoundError('Platform not found.')
     await recordAudit(trx, scope, { action: active ? 'lti.platform_saved' : 'lti.platform_removed', targetType: 'lti_platform', targetId: platformId, details: { active } })
@@ -122,7 +123,7 @@ export async function setPlatformActive(db: Db, scope: Scope, platformId: string
 /** Whether this LMS's course placements may open restricted (e.g. paid) packs. Off by default. */
 export async function setPlatformGrantsAccess(db: Db, scope: Scope, platformId: string, grantsAccess: boolean): Promise<void> {
   requireRole(scope, 'admin')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const result = await trx.updateTable('lti_platforms').set({ grants_access: grantsAccess }).where('id', '=', platformId).where('site_id', '=', scope.siteId).executeTakeFirst()
     if (Number(result.numUpdatedRows) === 0) throw new NotFoundError('Platform not found.')
     await recordAudit(trx, scope, { action: 'lti.platform_saved', targetType: 'lti_platform', targetId: platformId, details: { grantsAccess } })

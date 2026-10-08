@@ -51,13 +51,12 @@ judgement call made without the owner (review in one pass)._
 
 ## Test totals (latest local run)
 
-- 464 unit tests.
-- 132 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
+- 466 unit tests.
+- 136 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
 - 18 Playwright end-to-end journeys (17 on the main site, plus one on a fresh install), against MariaDB 11.8 in CI. They include a simulated LMS and the mock payment checkout.
 
 ## In progress now
 
-- **Phase-boundary review of Phase 4** (security and code). Fixes follow.
 - **Then Phase 5** (ecosystem): pack registry, type SDK and trust model, xAPI export, WordPress embed/SSO, and the LLM simulated patient on the diagnostic catalogue.
 
 ## Waiting on the owner

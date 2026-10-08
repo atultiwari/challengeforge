@@ -7,6 +7,7 @@
  * Cohort access is derived, not stored, so it ends when someone leaves the
  * cohort, the cohort is archived, or the assignment is removed.
  */
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { newId } from '../ids'
 import { NotFoundError, ValidationError, hasRole, requireRole, type Scope } from '../scope'
@@ -126,7 +127,7 @@ export async function lockedChallengeIds(db: Db, scope: Scope, items: readonly {
 
 export async function setPackAccess(db: Db, scope: Scope, packId: string, access: PackAccess): Promise<void> {
   requireRole(scope, 'admin')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const result = await trx.updateTable('packs').set({ access }).where('id', '=', packId).where('site_id', '=', scope.siteId).executeTakeFirst()
     if (Number(result.numUpdatedRows) === 0) {
       const exists = await trx.selectFrom('packs').select('id').where('id', '=', packId).where('site_id', '=', scope.siteId).executeTakeFirst()
@@ -200,7 +201,7 @@ export async function grantAccess(db: Db, scope: Scope, packId: string, email: s
     .$if(lookup.verifiedOnly === true, (q) => q.where('user.emailVerified', '=', true))
     .executeTakeFirst()
   if (!person) throw new ValidationError('Nobody on this site has that email.')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     await grantFromSource(trx, scope.siteId, person.userId, packId, 'admin', 'admin', expiresAt)
     await recordAudit(trx, scope, { action: 'access.granted', targetType: 'pack', targetId: packId, details: { userId: person.userId, expiresAt: expiresAt?.toISOString() ?? null } })
   })
@@ -208,7 +209,7 @@ export async function grantAccess(db: Db, scope: Scope, packId: string, email: s
 
 export async function revokeGrant(db: Db, scope: Scope, grantId: string): Promise<void> {
   requireRole(scope, 'admin')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const grant = await trx.selectFrom('access_grants').select(['pack_id', 'user_id', 'source']).where('id', '=', grantId).where('site_id', '=', scope.siteId).executeTakeFirst()
     if (!grant) throw new NotFoundError('Grant not found.')
     await trx.updateTable('access_grants').set({ revoked_at: new Date() }).where('id', '=', grantId).where('revoked_at', 'is', null).execute()

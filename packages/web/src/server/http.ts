@@ -43,8 +43,14 @@ export function toResponse(err: unknown): Response {
  * body has no Content-Length to refuse early). Null when too big or absent.
  */
 export async function readTextCapped(request: Request, maxBytes: number): Promise<string | null> {
+  const bytes = await readBytesCapped(request, maxBytes)
+  return bytes === null ? null : bytes.toString('utf8')
+}
+
+/** Reads a request body as bytes, stopping once it passes `maxBytes`. Null when too big. */
+export async function readBytesCapped(request: Request, maxBytes: number): Promise<Buffer | null> {
   if (Number(request.headers.get('content-length') ?? '0') > maxBytes) return null
-  if (!request.body) return ''
+  if (!request.body) return Buffer.alloc(0)
   const reader = request.body.getReader()
   const chunks: Uint8Array[] = []
   let size = 0
@@ -58,7 +64,7 @@ export async function readTextCapped(request: Request, maxBytes: number): Promis
     }
     chunks.push(value)
   }
-  return Buffer.concat(chunks).toString('utf8')
+  return Buffer.concat(chunks)
 }
 
 export async function readJson(request: Request, maxBytes = 64 * 1024): Promise<unknown> {

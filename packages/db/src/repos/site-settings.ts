@@ -6,6 +6,7 @@
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { fromJson, toJson } from '../json'
 import { NotFoundError, ValidationError, requireRole, type Scope } from '../scope'
@@ -37,7 +38,7 @@ export async function saveSiteSettings(db: Db, scope: Scope, current: SiteSettin
   const parsed = SiteSettingsSchema.safeParse({ ...current, ...changes })
   if (!parsed.success) throw new ValidationError(`Check the settings: ${parsed.error.issues.map((i) => i.path.join('.')).join(', ')}.`)
   const now = new Date()
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     await trx
       .insertInto('site_settings')
       .values({ site_id: scope.siteId, settings: toJson(parsed.data), updated_at: now })
@@ -53,6 +54,14 @@ export async function saveSiteSettings(db: Db, scope: Scope, current: SiteSettin
 export const SITE_FILE_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const
 export const MAX_SITE_FILE_BYTES = 512 * 1024
 
+/** The image type the bytes really are (by their magic numbers), or null. */
+export function sniffImage(bytes: Buffer): (typeof SITE_FILE_TYPES)[number] | null {
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg'
+  if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') return 'image/webp'
+  return null
+}
+
 export interface SiteFile {
   contentType: string
   bytes: Buffer
@@ -65,6 +74,8 @@ export async function putSiteFile(db: Db, scope: Scope, name: 'logo', contentTyp
   requireRole(scope, 'admin')
   if (!(SITE_FILE_TYPES as readonly string[]).includes(contentType)) throw new ValidationError('Use a PNG, JPEG or WebP image.')
   if (bytes.length === 0 || bytes.length > MAX_SITE_FILE_BYTES) throw new ValidationError('The image must be under 512 KB.')
+  // The browser's claimed type is not proof: the bytes must actually be that kind of image.
+  if (sniffImage(bytes) !== contentType) throw new ValidationError('That file is not a valid PNG, JPEG or WebP image.')
   const now = new Date()
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   await db

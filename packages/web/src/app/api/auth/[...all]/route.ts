@@ -31,7 +31,8 @@ export async function POST(request: Request): Promise<Response> {
   if (CREDENTIAL_PATHS.includes(pathname) && !rateLimitsDisabledForTests() && !credentialLimiter.allow(clientIp(request.headers))) {
     return fail(429, 'rate_limited', 'Too many attempts. Wait a minute and try again.')
   }
-  if (pathname === '/api/auth/sign-up/email' && !(await currentSettings()).signupsOpen) {
+  // Normalised, so "/API/auth/sign-up/email/" cannot slip past the closed-site check.
+  if (pathname.toLowerCase().replace(/\/+$/, '') === '/api/auth/sign-up/email' && !(await currentSettings()).signupsOpen) {
     return fail(403, 'signups_closed', 'This site is not taking new accounts. Ask the site administrator.')
   }
   return handlers.POST(request)

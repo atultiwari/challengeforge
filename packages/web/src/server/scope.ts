@@ -5,12 +5,15 @@ import { principalFor, type Scope } from '@challengeforge/db'
 import { siteAuth } from './auth'
 import { db } from './db'
 import { currentSiteContext } from './site'
+import { currentSettings } from './site-settings'
 
 export interface CurrentUser {
   id: string
   name: string
   email: string
   emailVerified: boolean
+  /** False when signed in but not a member of this (closed) site. */
+  member: boolean
 }
 
 /** The site this request is for (by host; see server/site.ts). */
@@ -21,9 +24,10 @@ export const currentScope = cache(async (): Promise<{ scope: Scope; user: Curren
   const site = await currentSite()
   const session = await (await siteAuth()).api.getSession({ headers: await headers() })
   if (!session) return { scope: { siteId: site.id, principal: null }, user: null }
-  const principal = await principalFor(db(), site.id, session.user.id)
+  // Accounts are install-wide: on a site closed to new people, an account that is not a member gets no role here.
+  const principal = await principalFor(db(), site.id, session.user.id, { autoJoin: (await currentSettings()).signupsOpen })
   return {
     scope: { siteId: site.id, principal },
-    user: { id: session.user.id, name: session.user.name, email: session.user.email, emailVerified: Boolean(session.user.emailVerified) },
+    user: { id: session.user.id, name: session.user.name, email: session.user.email, emailVerified: Boolean(session.user.emailVerified), member: principal !== null },
   }
 })

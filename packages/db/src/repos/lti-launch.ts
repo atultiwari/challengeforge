@@ -8,6 +8,7 @@
  * module only records what a verified launch established.
  */
 import { createHash, randomBytes } from 'node:crypto'
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { newId } from '../ids'
 import { ValidationError } from '../scope'
@@ -55,7 +56,7 @@ export async function linkLtiUser(db: Db, siteId: string, platformId: string, su
   const userId = newId()
   const handle = createHash('sha256').update(`${platformId}:${sub}`).digest('hex').slice(0, 24)
   try {
-    await db.transaction().execute(async (trx) => {
+    await transact(db, async (trx) => {
       await trx
         .insertInto('user')
         .values({ id: userId, name: (name.trim() || 'LMS learner').slice(0, 100), email: `lti-${handle}@lti.invalid`, emailVerified: false, image: null, createdAt: now, updatedAt: now })
@@ -73,15 +74,23 @@ export async function linkLtiUser(db: Db, siteId: string, platformId: string, su
 }
 
 /** A one-time ticket the web app redeems for a session (a minute to live). */
-export async function createLtiTicket(db: Db, userId: string, now: Date = new Date()): Promise<string> {
+export async function createLtiTicket(db: Db, siteId: string, userId: string, now: Date = new Date()): Promise<string> {
   const ticket = randomToken()
-  await db.insertInto('lti_tickets').values({ ticket, user_id: userId, expires_at: new Date(now.getTime() + TICKET_TTL_MS), used_at: null }).execute()
+  await db.insertInto('lti_tickets').values({ ticket, user_id: userId, site_id: siteId, expires_at: new Date(now.getTime() + TICKET_TTL_MS), used_at: null }).execute()
   return ticket
 }
 
-export async function redeemLtiTicket(db: Db, ticket: string, now: Date = new Date()): Promise<string | null> {
+/** Spends a ticket on the site that issued it (a ticket from one site never signs anyone in on another). */
+export async function redeemLtiTicket(db: Db, siteId: string, ticket: string, now: Date = new Date()): Promise<string | null> {
   if (ticket.length === 0 || ticket.length > 64) return null
-  const spent = await db.updateTable('lti_tickets').set({ used_at: now }).where('ticket', '=', ticket).where('used_at', 'is', null).where('expires_at', '>', now).executeTakeFirst()
+  const spent = await db
+    .updateTable('lti_tickets')
+    .set({ used_at: now })
+    .where('ticket', '=', ticket)
+    .where('site_id', '=', siteId)
+    .where('used_at', 'is', null)
+    .where('expires_at', '>', now)
+    .executeTakeFirst()
   if (Number(spent.numUpdatedRows) !== 1) return null
   return (await db.selectFrom('lti_tickets').select('user_id').where('ticket', '=', ticket).executeTakeFirstOrThrow()).user_id
 }

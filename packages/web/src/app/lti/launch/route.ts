@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     const launch = await verifyLaunch(db(), site.id, { idToken, state, cookieState })
     const userId = await linkLtiUser(db(), site.id, launch.platform.id, launch.payload.sub, displayName(launch.payload))
     const next = launch.payload[CLAIM.messageType] === 'LtiDeepLinkingRequest' ? await deepLinkingLaunch(site.id, launch, userId) : await resourceLaunch(site.id, ctx.baseUrl, launch, userId)
-    return handOff(await createLtiTicket(db(), userId), next)
+    return handOff(await createLtiTicket(db(), site.id, userId), next)
   } catch (err) {
     if (err instanceof LtiLaunchError || err instanceof ValidationError) return ltiError(err.message)
     console.error('[lti] launch failed', err)

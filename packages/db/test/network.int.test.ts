@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { addSiteDomain, createSite, findSiteByHost, grantNetworkAdminUnchecked, listSites, needsSetup, normaliseHost, primaryHostOf, principalFor } from '../src'
+import { addMember, addSiteDomain, createSite, discardSetupAccount, findSiteByHost, grantNetworkAdminUnchecked, listMembers, listSites, needsSetup, normaliseHost, primaryHostOf, principalFor, sniffImage } from '../src'
 import { createUser, freshDb, setupSite, type TestDb } from './harness'
 
 let t: TestDb
@@ -39,5 +39,40 @@ describe('multi-site', () => {
     const email = (await t.db.selectFrom('user').select('email').where('id', '=', other.principal!.userId).executeTakeFirstOrThrow()).email
     const third = await createSite(t.db, s.admin, { slug: 'third', name: 'Third', host: 'third.example.test', adminEmail: email })
     expect(await principalFor(t.db, third.id, other.principal!.userId)).toMatchObject({ role: 'admin' })
+  })
+
+  it('a closed site does not let install accounts walk in; an admin adds them (review)', async () => {
+    const outsider = await createUser(t.db, s.site.id, 'learner', 'outsider')
+    const closed = await createSite(t.db, s.admin, { slug: 'closed', name: 'Closed', host: 'closed.example.test' })
+    expect(await principalFor(t.db, closed.id, outsider.principal!.userId, { autoJoin: false })).toBeNull()
+    const email = (await t.db.selectFrom('user').select('email').where('id', '=', outsider.principal!.userId).executeTakeFirstOrThrow()).email
+    const closedAdmin = { siteId: closed.id, principal: { userId: s.admin.principal!.userId, role: 'admin' as const } }
+    await addMember(t.db, closedAdmin, email, 'learner')
+    expect(await principalFor(t.db, closed.id, outsider.principal!.userId, { autoJoin: false })).toMatchObject({ role: 'learner' })
+    expect((await listMembers(t.db, closedAdmin)).map((m) => m.email)).toContain(email)
+    await expect(addMember(t.db, closedAdmin, 'nobody@example.test', 'learner')).rejects.toMatchObject({ code: 'invalid' })
+  })
+
+  it('the default site address cannot be given away, and duplicates are a clear refusal (review)', async () => {
+    await expect(createSite(t.db, s.admin, { slug: 'grab', name: 'Grab', host: 'main.example.test', reservedHost: 'main.example.test' })).rejects.toMatchObject({ code: 'invalid' })
+    const results = await Promise.allSettled([
+      createSite(t.db, s.admin, { slug: 'race-a', name: 'A', host: 'race.example.test' }),
+      createSite(t.db, s.admin, { slug: 'race-b', name: 'B', host: 'race.example.test' }),
+    ])
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(results.find((r) => r.status === 'rejected')).toMatchObject({ reason: { code: 'invalid' } })
+  })
+
+  it('recognises images by their bytes, not their claimed type', () => {
+    expect(sniffImage(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]))).toBe('image/png')
+    expect(sniffImage(Buffer.from([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg')
+    expect(sniffImage(Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP')]))).toBe('image/webp')
+    expect(sniffImage(Buffer.from('<svg onload=alert(1)>'))).toBeNull()
+  })
+
+  it('a setup account that lost the claim is removed', async () => {
+    const loser = await createUser(t.db, s.site.id, 'learner', 'lost-claim')
+    await discardSetupAccount(t.db, loser.principal!.userId)
+    expect(await t.db.selectFrom('user').select('id').where('id', '=', loser.principal!.userId).executeTakeFirst()).toBeUndefined()
   })
 })

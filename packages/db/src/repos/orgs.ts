@@ -3,6 +3,7 @@
  * Site admins create organisations and name their org admins; org admins
  * manage the organisation's instructors; instructors run cohorts.
  */
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { newId } from '../ids'
 import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireRole, requireSignedIn, type Scope } from '../scope'
@@ -78,7 +79,7 @@ export async function createOrganisation(db: Db, scope: Scope, input: { slug: st
   const taken = await db.selectFrom('organisations').select('id').where('site_id', '=', scope.siteId).where('slug', '=', slug).executeTakeFirst()
   if (taken) throw new ValidationError('That short name is already used.')
   const org = { id: newId(), slug, name }
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     await trx.insertInto('organisations').values({ ...org, site_id: scope.siteId, created_at: new Date() }).execute()
     await recordAudit(trx, scope, { action: 'org.created', targetType: 'org', targetId: org.id, details: { slug, name } })
   })
@@ -152,7 +153,7 @@ export async function setOrgMember(db: Db, scope: Scope, orgId: string, email: s
     .$if(lookup.verifiedOnly === true, (q) => q.where('user.emailVerified', '=', true))
     .executeTakeFirst()
   if (!person) throw new ValidationError('Nobody on this site has that email. Ask them to create an account first.')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const current = await trx.selectFrom('org_members').select('role').where('org_id', '=', orgId).where('user_id', '=', person.userId).forUpdate().executeTakeFirst()
     if (current?.role === 'org_admin' && role !== 'org_admin' && !hasRole(scope, 'admin')) throw new ForbiddenError('Only a site admin can change an organisation admin.')
     if (current?.role === role) return
@@ -170,7 +171,7 @@ export async function setOrgMember(db: Db, scope: Scope, orgId: string, email: s
 
 export async function removeOrgMember(db: Db, scope: Scope, orgId: string, userId: string): Promise<void> {
   await requireOrgRole(db, scope, orgId, 'org_admin')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const current = await trx.selectFrom('org_members').select('role').where('org_id', '=', orgId).where('user_id', '=', userId).forUpdate().executeTakeFirst()
     if (!current) return
     if (current.role === 'org_admin' && !hasRole(scope, 'admin')) throw new ForbiddenError('Only a site admin can remove an organisation admin.')

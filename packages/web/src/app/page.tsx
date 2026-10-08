@@ -21,10 +21,10 @@ export default async function CatalogPage() {
   if (!user && (await needsSetup(db(), scope.siteId))) redirect('/setup')
   const [challenges, progress, cohorts] = await Promise.all([
     listPlayable(db(), scope),
-    user ? listMyProgress(db(), scope) : Promise.resolve([] as ProgressRow[]),
-    user ? listMyCohorts(db(), scope).then((c) => c.learning) : Promise.resolve([] as Cohort[]),
+    user?.member ? listMyProgress(db(), scope) : Promise.resolve([] as ProgressRow[]),
+    user?.member ? listMyCohorts(db(), scope).then((c) => c.learning) : Promise.resolve([] as Cohort[]),
   ])
-  const certificates = user ? await listMyCertificates(db(), scope) : []
+  const certificates = user?.member ? await listMyCertificates(db(), scope) : []
   const byChallenge = new Map(progress.map((p) => [p.challengeId, p]))
   const locked = await lockedChallengeIds(db(), scope, challenges)
 
@@ -39,8 +39,11 @@ export default async function CatalogPage() {
           </p>
         )}
       </header>
+      {user && !user.member && (
+        <p role="status" className="card">You are signed in, but this site only admits people an administrator adds. Ask the site administrator to add you.</p>
+      )}
       {user && !user.emailVerified && mailer().enabled && !user.email.endsWith('@lti.invalid') && <ConfirmEmailNotice email={user.email} />}
-      {user && (
+      {user?.member && (
         <section className="space-y-2" aria-labelledby="my-cohorts">
           <h2 id="my-cohorts" className="text-2xl">Your cohorts</h2>
           {cohorts.length > 0 && (

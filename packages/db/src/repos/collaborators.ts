@@ -3,6 +3,7 @@
  * editors and admins. Every edit path asks `canEdit`, so the rule lives in
  * one place.
  */
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireRole, type Scope } from '../scope'
 import { recordAudit } from './audit'
@@ -72,7 +73,7 @@ export async function addCollaborator(db: Db, scope: Scope, challengeId: string,
   if (person.userId === challenge.created_by) throw new ValidationError('That person created this challenge.')
   const count = await db.selectFrom('challenge_collaborators').select((eb) => eb.fn.countAll<string>().as('n')).where('challenge_id', '=', challengeId).executeTakeFirst()
   if (Number(count?.n ?? 0) >= MAX_COLLABORATORS) throw new ValidationError(`A challenge can have at most ${MAX_COLLABORATORS} co-authors.`)
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const result = await trx
       .insertInto('challenge_collaborators')
       .values({ challenge_id: challengeId, user_id: person.userId, site_id: scope.siteId, added_by: scope.principal!.userId, created_at: new Date() })
@@ -87,7 +88,7 @@ export async function addCollaborator(db: Db, scope: Scope, challengeId: string,
 
 export async function removeCollaborator(db: Db, scope: Scope, challengeId: string, userId: string): Promise<void> {
   await loadManaged(db, scope, challengeId)
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const result = await trx.deleteFrom('challenge_collaborators').where('challenge_id', '=', challengeId).where('user_id', '=', userId).executeTakeFirst()
     if (Number(result.numDeletedRows) > 0) {
       await recordAudit(trx, scope, { action: 'collaborator.removed', targetType: 'challenge', targetId: challengeId, details: { userId } })

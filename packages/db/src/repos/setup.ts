@@ -6,6 +6,7 @@
  * spends every token; afterwards the wizard is gone for good.
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { transact } from '../tx'
 import type { Db } from '../client'
 
 const TOKEN_TTL_MS = 60 * 60_000
@@ -47,7 +48,7 @@ export async function setupTokenValid(db: Db, siteId: string, presented: string,
  * browsers finishing at once: only the first wins). Spends all tokens.
  */
 export async function claimSite(db: Db, siteId: string, userId: string): Promise<boolean> {
-  return db.transaction().execute(async (trx) => {
+  return transact(db, async (trx) => {
     // Serialise claims on the site row.
     await trx.selectFrom('sites').select('id').where('id', '=', siteId).forUpdate().executeTakeFirst()
     const admin = await trx.selectFrom('memberships').select('user_id').where('site_id', '=', siteId).where('role', '=', 'admin').executeTakeFirst()
@@ -66,4 +67,14 @@ export async function claimSite(db: Db, siteId: string, userId: string): Promise
 export async function userIdByEmail(db: Db, email: string): Promise<string | null> {
   const row = await db.selectFrom('user').select('id').where('email', '=', email.trim().toLowerCase()).executeTakeFirst()
   return row?.id ?? null
+}
+
+/** Removes an account created for a setup that then lost the claim (so no orphan account remains). */
+export async function discardSetupAccount(db: Db, userId: string): Promise<void> {
+  await transact(db, async (trx) => {
+    await trx.deleteFrom('session').where('userId', '=', userId).execute()
+    await trx.deleteFrom('account').where('userId', '=', userId).execute()
+    await trx.deleteFrom('memberships').where('user_id', '=', userId).execute()
+    await trx.deleteFrom('user').where('id', '=', userId).execute()
+  })
 }

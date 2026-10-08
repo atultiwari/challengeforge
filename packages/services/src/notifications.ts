@@ -54,8 +54,10 @@ export async function sendDueNotifications(db: Db, mailer: Mailer, appUrl: strin
   const counts = { sent: 0, skipped: 0, failed: 0 }
   const siteNames = new Map<string, string>()
   const siteUrls = new Map<string, string>()
+  // No outgoing mail configured (e.g. cron's environment lacks MAIL_*): leave everything queued for when it is.
+  if (!mailer.enabled) return counts
   for (const n of await claimDueNotifications(db, options.limit ?? BATCH, now)) {
-    if (!mailer.enabled || !n.wantsUpdates || n.email.endsWith('@lti.invalid')) {
+    if (!n.wantsUpdates || n.email.endsWith('@lti.invalid')) {
       await finishNotification(db, n.id, 'skipped', now)
       counts.skipped += 1
       continue

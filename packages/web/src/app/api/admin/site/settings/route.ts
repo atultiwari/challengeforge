@@ -3,6 +3,7 @@ import { db } from '@/server/db'
 import { oneOf, optionalText, text } from '@/server/body'
 import { ok } from '@/server/http'
 import { mutation } from '@/server/route'
+import { clearSiteCache } from '@/server/site'
 import { currentSettings } from '@/server/site-settings'
 import { PRESETS, themeProblems, type PresetId } from '@/lib/themes'
 
@@ -21,6 +22,8 @@ export async function POST(request: Request) {
       currency: text(body, 'currency', 3).toUpperCase(),
       theme: { preset, ...(accent ? { accent } : {}) },
     })
+    // The site's name is part of the cached site lookup.
+    clearSiteCache()
     return ok(saved)
   })
 }

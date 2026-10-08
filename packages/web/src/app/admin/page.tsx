@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { hasRole, listForAuthoring, listMembers, listReviewQueue } from '@challengeforge/db'
 import { RoleSelect } from '@/components/admin/RoleSelect'
+import { SimpleForm } from '@/components/common/SimpleForm'
 import { db } from '@/server/db'
 import { requirePageRole } from '@/server/guards'
 
@@ -75,6 +76,17 @@ export default async function AdminPage() {
             </li>
           ))}
         </ul>
+        <div className="card max-w-xl">
+          <SimpleForm
+            url="/api/admin/members"
+            submitLabel="Add person"
+            inline
+            fields={[
+              { name: 'email', label: 'Add someone by email (an existing account)', type: 'email', required: true, maxLength: 254 },
+              { name: 'role', label: 'Role', type: 'select', value: 'learner', options: [['learner', 'Learner'], ['author', 'Author'], ['editor', 'Editor'], ['admin', 'Admin']] },
+            ]}
+          />
+        </div>
       </section>
       )}
     </div>

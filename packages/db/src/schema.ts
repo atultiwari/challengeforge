@@ -409,6 +409,7 @@ export interface LtiUsersTable {
 export interface LtiTicketsTable {
   ticket: string
   user_id: string
+  site_id: string | null
   expires_at: Timestamp
   used_at: NullableTimestamp
 }

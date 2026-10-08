@@ -9,6 +9,7 @@
  *   - each provider event is applied once (payment_events primary key);
  *   - paying creates a grant; a refund revokes it.
  */
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { newId } from '../ids'
 import { toBool } from '../json'
@@ -82,7 +83,7 @@ export async function saveProduct(db: Db, scope: Scope, input: { packId: string;
   const pack = await db.selectFrom('packs').select('id').where('id', '=', input.packId).where('site_id', '=', scope.siteId).executeTakeFirst()
   if (!pack) throw new NotFoundError('Pack not found.')
   const now = new Date()
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     await trx
       .insertInto('products')
       .values({ id: newId(), site_id: scope.siteId, pack_id: input.packId, price_minor: input.priceMinor, currency, active: input.active, created_at: now, updated_at: now })
@@ -231,7 +232,7 @@ async function applyRefunded(trx: Db, payment: PaymentRow, system: Scope, now: D
  * succeeds. Events about payments that were never ours are acknowledged.
  */
 export async function applyPaymentEvent(db: Db, event: PaymentEvent): Promise<EventOutcome> {
-  return db.transaction().execute(async (trx): Promise<EventOutcome> => {
+  return transact(db, async (trx): Promise<EventOutcome> => {
     const recorded = await trx
       .insertInto('payment_events')
       .values({ provider: event.provider, event_id: event.eventId.slice(0, 128), type: event.type, received_at: new Date() })

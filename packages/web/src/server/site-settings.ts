@@ -3,11 +3,11 @@ import { cache } from 'react'
 import { headers } from 'next/headers'
 import { getSiteSettings, type SiteSettings } from '@challengeforge/db'
 import { db } from './db'
-import { currentSite } from './scope'
+import { currentSiteContext } from './site'
 
 /** This site's settings, once per request. The environment only provides the defaults. */
 export const currentSettings = cache(async (): Promise<SiteSettings> => {
-  const site = await currentSite()
+  const { site } = await currentSiteContext()
   return getSiteSettings(db(), site.id, { name: site.name })
 })
 

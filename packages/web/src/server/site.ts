@@ -20,7 +20,16 @@ export interface SiteContext {
 }
 
 const TTL_MS = 30_000
-const cacheByHost = new Map<string, { ctx: SiteContext; at: number }>()
+/** Registered hosts (few). Unknown hosts are cached apart, so random Host headers cannot evict real sites. */
+const known = new Map<string, { ctx: SiteContext; at: number }>()
+const unknown = new Map<string, number>()
+const MAX_UNKNOWN = 500
+
+/** Forget cached site lookups (after a site, domain or name changes). */
+export function clearSiteCache(): void {
+  known.clear()
+  unknown.clear()
+}
 
 async function defaultContext(): Promise<SiteContext> {
   const config = env()
@@ -29,22 +38,40 @@ async function defaultContext(): Promise<SiteContext> {
   return { site, baseUrl: config.APP_URL, isDefault: true }
 }
 
-/** The host a request was addressed to (behind a proxy, the forwarded one). */
+/**
+ * The host a request was addressed to. X-Forwarded-Host is used only when
+ * TRUST_FORWARDED_HOST=true (a proxy that rewrites Host); otherwise a client
+ * could set it to make a cache store one site's answer under another's address.
+ */
 export function requestHost(source: Headers): string | null {
-  const forwarded = source.get('x-forwarded-host')?.split(',')[0]?.trim()
-  return forwarded || source.get('host')
+  if (process.env['TRUST_FORWARDED_HOST'] === 'true') {
+    const forwarded = source.get('x-forwarded-host')?.split(',')[0]?.trim()
+    if (forwarded) return forwarded
+  }
+  return source.get('host')
 }
 
 export async function siteContextForHost(rawHost: string | null): Promise<SiteContext> {
   const host = rawHost ? normaliseHost(rawHost) : null
-  const key = host ?? ''
-  const hit = cacheByHost.get(key)
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.ctx
-  const scheme = new URL(env().APP_URL).protocol
-  const site = host ? await findSiteByHost(db(), host) : null
-  const ctx = site ? { site, baseUrl: `${scheme}//${host}`, isDefault: false } : await defaultContext()
-  if (cacheByHost.size > 1000) cacheByHost.clear()
-  cacheByHost.set(key, { ctx, at: Date.now() })
+  const now = Date.now()
+  const hit = host ? known.get(host) : undefined
+  if (hit && now - hit.at < TTL_MS) return hit.ctx
+  const seenUnknown = host ? unknown.get(host) : undefined
+  if (host && (seenUnknown === undefined || now - seenUnknown >= TTL_MS)) {
+    const site = await findSiteByHost(db(), host)
+    if (site) {
+      const ctx = { site, baseUrl: `${new URL(env().APP_URL).protocol}//${host}`, isDefault: false }
+      known.set(host, { ctx, at: now })
+      unknown.delete(host)
+      return ctx
+    }
+    if (unknown.size >= MAX_UNKNOWN) unknown.clear()
+    unknown.set(host, now)
+  }
+  const fallback = known.get('')
+  if (fallback && now - fallback.at < TTL_MS) return fallback.ctx
+  const ctx = await defaultContext()
+  known.set('', { ctx, at: now })
   return ctx
 }
 

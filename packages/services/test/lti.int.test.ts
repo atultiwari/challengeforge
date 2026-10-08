@@ -201,13 +201,14 @@ describe('accounts and tickets', () => {
     expect(user.name).toBe('Lena Learner')
   })
 
-  it('a session ticket works once, within its minute', async () => {
+  it('a session ticket works once, within its minute, and only on the site that issued it', async () => {
     const userId = await linkLtiUser(t.db, s.site.id, platform.id, 'lms-user-1', 'Lena Learner')
-    const ticket = await createLtiTicket(t.db, userId)
-    expect(await redeemLtiTicket(t.db, ticket)).toBe(userId)
-    expect(await redeemLtiTicket(t.db, ticket)).toBeNull()
-    const late = await createLtiTicket(t.db, userId, new Date(Date.now() - 120_000))
-    expect(await redeemLtiTicket(t.db, late)).toBeNull()
+    const ticket = await createLtiTicket(t.db, s.site.id, userId)
+    expect(await redeemLtiTicket(t.db, 'another-site-id', ticket)).toBeNull()
+    expect(await redeemLtiTicket(t.db, s.site.id, ticket)).toBe(userId)
+    expect(await redeemLtiTicket(t.db, s.site.id, ticket)).toBeNull()
+    const late = await createLtiTicket(t.db, s.site.id, userId, new Date(Date.now() - 120_000))
+    expect(await redeemLtiTicket(t.db, s.site.id, late)).toBeNull()
   })
 })
 

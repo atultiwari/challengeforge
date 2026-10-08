@@ -1,7 +1,7 @@
 import 'server-only'
 import { betterAuth } from 'better-auth'
 import { nextCookies } from 'better-auth/next-js'
-import { recordAudit, redeemLtiTicket } from '@challengeforge/db'
+import { recordAudit, redeemLtiTicket, siteDisplayName } from '@challengeforge/db'
 import { db } from './db'
 import { env } from './env'
 import { ltiSessionPlugin } from './lti-session-plugin'
@@ -24,9 +24,10 @@ function createAuth(ctx: SiteContext) {
   if (config.REQUIRE_EMAIL_VERIFICATION && !mail.enabled) {
     throw new Error('Invalid configuration - REQUIRE_EMAIL_VERIFICATION needs outgoing mail (MAIL_MODE=smtp).')
   }
-  const siteName = ctx.site.name
+  // Read when mail is sent, so a renamed site needs no new auth instance.
+  const siteName = () => siteDisplayName(db(), ctx.site.id)
   return betterAuth({
-    appName: siteName,
+    appName: ctx.site.name,
     baseURL: ctx.baseUrl,
     secret: config.BETTER_AUTH_SECRET,
     trustedOrigins: [ctx.baseUrl],
@@ -40,7 +41,7 @@ function createAuth(ctx: SiteContext) {
       // A reset signs the account out everywhere, so a stolen session dies with the old password.
       revokeSessionsOnPasswordReset: true,
       ...(mail.enabled
-        ? { sendResetPassword: async ({ user, url }) => sendInBackground(passwordResetMessage(user.email, user.name, url, siteName), 'a password reset') }
+        ? { sendResetPassword: async ({ user, url }) => sendInBackground(passwordResetMessage(user.email, user.name, url, await siteName()), 'a password reset') }
         : {}),
       // The password has already changed: a failed audit write is logged, never turned into an error for the user.
       onPasswordReset: async ({ user }) => {
@@ -57,7 +58,7 @@ function createAuth(ctx: SiteContext) {
             sendOnSignUp: config.REQUIRE_EMAIL_VERIFICATION,
             autoSignInAfterVerification: true,
             expiresIn: 60 * 60 * 24,
-            sendVerificationEmail: async ({ user, url }) => sendInBackground(verificationMessage(user.email, user.name, url, siteName), 'an email confirmation'),
+            sendVerificationEmail: async ({ user, url }) => sendInBackground(verificationMessage(user.email, user.name, url, await siteName()), 'an email confirmation'),
           },
         }
       : {}),
@@ -65,7 +66,7 @@ function createAuth(ctx: SiteContext) {
     // In-memory limits reset when the host idles the process; they still blunt bursts.
     rateLimit: { enabled: !rateLimitsDisabledForTests(), window: 60, max: 30 },
     advanced: { useSecureCookies: ctx.baseUrl.startsWith('https://') },
-    plugins: [nextCookies(), ltiSessionPlugin((ticket) => redeemLtiTicket(db(), ticket))],
+    plugins: [nextCookies(), ltiSessionPlugin((ticket) => redeemLtiTicket(db(), ctx.site.id, ticket))],
   })
 }
 
@@ -75,7 +76,7 @@ const globalForAuth = globalThis as unknown as { cfAuth?: Map<string, Auth> }
 /** The auth instance for a site (created once per site and base URL). */
 export function authFor(ctx: SiteContext): Auth {
   globalForAuth.cfAuth ??= new Map()
-  const key = `${ctx.site.id}|${ctx.baseUrl}|${ctx.site.name}`
+  const key = `${ctx.site.id}|${ctx.baseUrl}`
   let instance = globalForAuth.cfAuth.get(key)
   if (!instance) {
     instance = createAuth(ctx)

@@ -9,7 +9,7 @@ import { newId } from '../ids'
 import { fromJson, toBool, toJson } from '../json'
 import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireRole, type Scope } from '../scope'
 import type { ChallengeStatus, PackAccess } from '../schema'
-import { withDeadlockRetry } from '../tx'
+import { transact, withDeadlockRetry } from '../tx'
 import { recordAudit } from './audit'
 import { canEdit } from './collaborators'
 
@@ -95,7 +95,7 @@ export async function createChallenge(db: Db, scope: Scope, registry: TypeRegist
   const definition = validated(registry, input.typeId, input.typeVersion, input.definition)
   const now = new Date()
   const id = newId()
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     await trx
       .insertInto('challenges')
       .values({
@@ -216,7 +216,7 @@ export async function publish(db: Db, scope: Scope, challengeId: string): Promis
 
 export async function archive(db: Db, scope: Scope, challengeId: string): Promise<void> {
   requireRole(scope, 'editor')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const result = await trx
       .updateTable('challenges')
       .set({ status: 'archived', updated_at: new Date() })

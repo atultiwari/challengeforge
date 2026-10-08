@@ -8,6 +8,7 @@
  * random public id; the verify page shows it to anyone holding the id.
  */
 import { randomBytes } from 'node:crypto'
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { toBool } from '../json'
 import { NotFoundError, ValidationError, requireRole, requireSignedIn, type Scope } from '../scope'
@@ -141,7 +142,7 @@ async function issueForPack(trx: Db, siteId: string, userId: string, packId: str
  */
 export async function setCertificatesEnabled(db: Db, scope: Scope, packId: string, enabled: boolean): Promise<number> {
   requireRole(scope, 'admin')
-  return db.transaction().execute(async (trx) => {
+  return transact(db, async (trx) => {
     const pack = await trx.selectFrom('packs').select(['id', 'title']).where('id', '=', packId).where('site_id', '=', scope.siteId).executeTakeFirst()
     if (!pack) throw new NotFoundError('Pack not found.')
     await trx.updateTable('packs').set({ certificates_enabled: enabled }).where('id', '=', packId).execute()
@@ -183,7 +184,7 @@ export async function revokeCertificate(db: Db, scope: Scope, id: string, reason
   requireRole(scope, 'admin')
   const clean = reason.trim()
   if (clean === '' || clean.length > 500) throw new ValidationError('Give a reason (up to 500 characters); it is shown on the verify page.')
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     const result = await trx
       .updateTable('certificates')
       .set({ revoked_at: new Date(), revoke_reason: clean })

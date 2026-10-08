@@ -170,6 +170,7 @@ program
       const secret = process.env['BETTER_AUTH_SECRET']
       const scores = secret ? await sendDueLtiScores(db, secret) : { sent: 0, failed: 0 }
       const appUrl = process.env['APP_URL']?.replace(/\/$/, '')
+      if (!appUrl) process.stderr.write('APP_URL is not set: notification emails stay queued until it is (see DEPLOY-HOSTINGER.md section 6).\n')
       const mail = appUrl ? await sendDueNotifications(db, createMailer(mailConfigFromEnv(process.env)), appUrl) : { sent: 0, skipped: 0, failed: 0 }
       process.stdout.write(
         `Advanced ${slices} job slices; closed ${closed} stale AI call reservations; ` +

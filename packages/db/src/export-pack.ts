@@ -5,6 +5,7 @@
  * reads (PLAN.md §3.7). Archived challenges are left out. Data only, never code.
  * Read in one transaction, so the export is a consistent snapshot.
  */
+import { transact } from './tx'
 import type { Db } from './client'
 import type { LoadedPack, PackManifest } from './import-pack'
 import { fromJson } from './json'
@@ -18,7 +19,7 @@ const assetFile = (challengeIndex: number, assetIndex: number, path: string): st
 
 export async function exportPack(db: Db, scope: Scope, packSlug: string): Promise<LoadedPack> {
   requireRole(scope, 'admin')
-  return db.transaction().execute((trx) => exportInside(trx, scope, packSlug))
+  return transact(db, (trx) => exportInside(trx, scope, packSlug))
 }
 
 async function exportInside(db: Db, scope: Scope, packSlug: string): Promise<LoadedPack> {

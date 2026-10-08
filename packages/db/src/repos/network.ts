@@ -7,6 +7,7 @@
  * Network admins (an install-level role, granted from the CLI) create sites,
  * attach domains and name each new site's first admin.
  */
+import { transact } from '../tx'
 import type { Db } from '../client'
 import { newId } from '../ids'
 import { ForbiddenError, NotFoundError, ValidationError, requireSignedIn, type Scope } from '../scope'
@@ -74,17 +75,27 @@ export async function listSites(db: Db, scope: Scope): Promise<NetworkSite[]> {
 
 const SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/
 
-async function addHost(trx: Db, siteId: string, host: string): Promise<string> {
+const TAKEN = 'That host already serves a site.'
+
+async function addHost(trx: Db, siteId: string, host: string, reservedHost: string | null): Promise<string> {
   const normalised = normaliseHost(host)
   if (!normalised) throw new ValidationError('Enter a host name such as lab.example.org.')
+  // The default site's own address (APP_URL) can never be handed to another site.
+  if (reservedHost && normalised === normaliseHost(reservedHost)) throw new ValidationError(TAKEN)
   const taken = await trx.selectFrom('site_domains').select('site_id').where('host', '=', normalised).executeTakeFirst()
-  if (taken) throw new ValidationError('That host already serves a site.')
+  if (taken) throw new ValidationError(TAKEN)
   await trx.insertInto('site_domains').values({ host: normalised, site_id: siteId, created_at: new Date() }).execute()
   return normalised
 }
 
+/** A concurrent duplicate slips past the check and hits the unique key: same answer as the check. */
+function duplicateAsValidation(err: unknown, message: string): never {
+  if ((err as { code?: string }).code === 'ER_DUP_ENTRY') throw new ValidationError(message)
+  throw err
+}
+
 /** Creates a site served at `host`, with `adminEmail`'s account (or the creator) as its first admin. */
-export async function createSite(db: Db, scope: Scope, input: { slug: string; name: string; host: string; adminEmail?: string }): Promise<Site> {
+export async function createSite(db: Db, scope: Scope, input: { slug: string; name: string; host: string; adminEmail?: string; reservedHost?: string | null }): Promise<Site> {
   const creator = await requireNetworkAdmin(db, scope)
   const slug = input.slug.trim().toLowerCase()
   const name = input.name.trim()
@@ -97,24 +108,24 @@ export async function createSite(db: Db, scope: Scope, input: { slug: string; na
     adminId = person.id
   }
   const site: Site = { id: newId(), slug, name }
-  await db.transaction().execute(async (trx) => {
+  await transact(db, async (trx) => {
     if (await trx.selectFrom('sites').select('id').where('slug', '=', slug).executeTakeFirst()) throw new ValidationError('That short name is already used.')
     await trx.insertInto('sites').values({ ...site, created_at: new Date() }).execute()
-    const host = await addHost(trx, site.id, input.host)
+    const host = await addHost(trx, site.id, input.host, input.reservedHost ?? null)
     await trx.insertInto('memberships').values({ site_id: site.id, user_id: adminId, role: 'admin', created_at: new Date() }).execute()
     await recordAudit(trx, { siteId: site.id, principal: scope.principal }, { action: 'site.created', targetType: 'site', targetId: site.id, details: { slug, host, adminId } })
-  })
+  }).catch((err: unknown) => duplicateAsValidation(err, 'That short name or host is already used.'))
   return site
 }
 
-export async function addSiteDomain(db: Db, scope: Scope, siteId: string, host: string): Promise<string> {
+export async function addSiteDomain(db: Db, scope: Scope, siteId: string, host: string, reservedHost: string | null = null): Promise<string> {
   await requireNetworkAdmin(db, scope)
-  return db.transaction().execute(async (trx) => {
+  return transact(db, async (trx) => {
     if (!(await trx.selectFrom('sites').select('id').where('id', '=', siteId).executeTakeFirst())) throw new NotFoundError('Site not found.')
-    const added = await addHost(trx, siteId, host)
+    const added = await addHost(trx, siteId, host, reservedHost)
     await recordAudit(trx, { siteId, principal: scope.principal }, { action: 'site.domain_added', targetType: 'site', targetId: siteId, details: { host: added } })
     return added
-  })
+  }).catch((err: unknown) => duplicateAsValidation(err, TAKEN))
 }
 
 /**
