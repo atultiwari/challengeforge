@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { verifyCertificate } from '@challengeforge/db'
 import { PrintButton } from '@/components/certificates/PrintButton'
 import { db } from '@/server/db'
-import { env } from '@/server/env'
+import { currentSiteContext } from '@/server/site'
 import { currentSite } from '@/server/scope'
 
 // Holding the link is what lets someone verify; keep certificates out of search engines.
@@ -17,7 +17,7 @@ export default async function CertificatePage({ params }: { params: Promise<{ ce
   const site = await currentSite()
   const cert = await verifyCertificate(db(), site.id, certificateId)
   if (!cert) notFound()
-  const url = `${env().APP_URL}/certificates/${cert.id}`
+  const url = `${(await currentSiteContext()).baseUrl}/certificates/${cert.id}`
   return (
     <div className="space-y-6">
       {cert.revokedAt ? (

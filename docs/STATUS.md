@@ -12,7 +12,7 @@ judgement call made without the owner (review in one pass)._
 | 1 | Single-site MVP (Clinical AI Level 1 on MySQL) | ✅ Done | [PHASE-1-REPORT](PHASE-1-REPORT.md) |
 | 2 | Interactive in the product (diagnostic sims, AI missions, jobs, review queue, pack export) | ✅ Done | [PHASE-2-REPORT](PHASE-2-REPORT.md) |
 | 3 | Publishing and institutions (roles, cohorts, payments, certificates, analytics, LTI 1.3) | ✅ Done (reviewed; all high and medium findings fixed) | [PHASE-3-REPORT](PHASE-3-REPORT.md) |
-| 4 | Multi-site and themes | 🚧 Started: R1 (settings and themes) part 1 is in | [PHASE-4-PLAN](PHASE-4-PLAN.md) |
+| 4 | Multi-site and themes | ✅ Done (R1–R4) | [PHASE-4-REPORT](PHASE-4-REPORT.md) |
 | 5 | Ecosystem (pack registry, type SDK, xAPI, LLM patient) | Not started | PLAN.md §8 |
 
 **Deployed:** not yet. Hostinger's database is confirmed as **MariaDB 11.8**
@@ -52,16 +52,13 @@ judgement call made without the owner (review in one pass)._
 ## Test totals (latest local run)
 
 - 464 unit tests.
-- 129 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
-- 17 Playwright end-to-end journeys (16 on the main site, plus one on a fresh install), against MariaDB 11.8 in CI. They include a simulated LMS and the mock payment checkout.
+- 132 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
+- 18 Playwright end-to-end journeys (17 on the main site, plus one on a fresh install), against MariaDB 11.8 in CI. They include a simulated LMS and the mock payment checkout.
 
 ## In progress now
 
-**Phase 4** ([plan](PHASE-4-PLAN.md)):
-- **R1, settings and themes: done** (presets, a WCAG-checked custom accent, logo, footer, sign-ups switch; E2E covers it).
-- **R2, setup wizard: done.** Install entirely in the browser: the server migrates on start, and `/setup` with a setup token creates the first admin. E2E runs it on a fresh, empty install.
-- **R3, notifications: done.** Emails for a certificate issued, a review decided and a cohort joined, sent by cron with retries. Learners opt out on their Account page.
-- **R4:** multi-site.
+- **Phase-boundary review of Phase 4** (security and code). Fixes follow.
+- **Then Phase 5** (ecosystem): pack registry, type SDK and trust model, xAPI export, WordPress embed/SSO, and the LLM simulated patient on the diagnostic catalogue.
 
 ## Waiting on the owner
 

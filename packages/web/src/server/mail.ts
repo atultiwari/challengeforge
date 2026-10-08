@@ -1,6 +1,5 @@
 import 'server-only'
 import { createMailer, linkMessage, mailConfigFromEnv, type Mailer } from '@challengeforge/services'
-import { env } from './env'
 
 /** Outgoing mail, configured from MAIL_* / SMTP_* (see packages/services/src/mail.ts). */
 let instance: Mailer | null = null
@@ -23,10 +22,10 @@ export function sendInBackground(message: Parameters<Mailer['send']>[0], what: s
     .catch((cause: unknown) => console.error(`[mail] could not send ${what}`, cause))
 }
 
-export function passwordResetMessage(to: string, name: string, url: string) {
+export function passwordResetMessage(to: string, name: string, url: string, siteName: string) {
   return linkMessage({
     to,
-    subject: `Reset your ${env().SITE_NAME} password`,
+    subject: `Reset your ${siteName} password`,
     greeting: `Hello ${name},`,
     body: 'Someone (hopefully you) asked to reset the password for this account. The link works once, for one hour.',
     action: 'Choose a new password',
@@ -35,10 +34,10 @@ export function passwordResetMessage(to: string, name: string, url: string) {
   })
 }
 
-export function verificationMessage(to: string, name: string, url: string) {
+export function verificationMessage(to: string, name: string, url: string, siteName: string) {
   return linkMessage({
     to,
-    subject: `Confirm your email for ${env().SITE_NAME}`,
+    subject: `Confirm your email for ${siteName}`,
     greeting: `Hello ${name},`,
     body: 'Confirm this address to finish creating your account.',
     action: 'Confirm my email',

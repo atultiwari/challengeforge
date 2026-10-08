@@ -1,11 +1,12 @@
 import { toNextJsHandler } from 'better-auth/next-js'
-import { auth } from '@/server/auth'
+import { authForRequest } from '@/server/auth'
 import { fail, sameOrigin } from '@/server/http'
 import { clientIp, createRateLimiter } from '@/lib/rate-limit'
 import { rateLimitsDisabledForTests } from '@/server/test-switches'
 import { currentSettings } from '@/server/site-settings'
 
-const handlers = toNextJsHandler((request: Request) => auth().handler(request))
+/** Each request goes to its own site's auth instance (Phase 4, R4). */
+const handlers = toNextJsHandler(async (request: Request) => (await authForRequest(request)).handler(request))
 
 /**
  * Our own guard in front of Better Auth for credential endpoints: an explicit
@@ -25,7 +26,7 @@ const CREDENTIAL_PATHS = [
 export const GET = handlers.GET
 
 export async function POST(request: Request): Promise<Response> {
-  if (!sameOrigin(request)) return fail(403, 'bad_origin', 'Request refused.')
+  if (!(await sameOrigin(request))) return fail(403, 'bad_origin', 'Request refused.')
   const { pathname } = new URL(request.url)
   if (CREDENTIAL_PATHS.includes(pathname) && !rateLimitsDisabledForTests() && !credentialLimiter.allow(clientIp(request.headers))) {
     return fail(429, 'rate_limited', 'Too many attempts. Wait a minute and try again.')

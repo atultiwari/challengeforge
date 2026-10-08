@@ -13,9 +13,8 @@ import {
 } from '@challengeforge/db'
 import { AGS_SCORE_SCOPE, CLAIM, LtiLaunchError, displayName, isTeachingRole, verifyLaunch, type VerifiedLaunch } from '@challengeforge/services'
 import { db } from '@/server/db'
-import { env } from '@/server/env'
+import { siteContextForRequest } from '@/server/site'
 import { clearStateCookie, escapeHtml, field, LTI_STATE_COOKIE, ltiError, ltiPage, ticketCookie } from '@/server/lti'
-import { currentSite } from '@/server/scope'
 import { readTextCapped } from '@/server/http'
 import { withinPublicLimit } from '@/server/limits'
 
@@ -25,14 +24,14 @@ const LTI_GRANT_MS = 180 * 24 * 60 * 60_000
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** The challenge a resource link launches: the custom parameter, else our own /play/<id> target. */
-function challengeOf(launch: VerifiedLaunch): string | null {
+function challengeOf(launch: VerifiedLaunch, baseUrl: string): string | null {
   const custom = launch.payload[CLAIM.custom]?.['challenge_id']
   if (typeof custom === 'string' && UUID.test(custom)) return custom
   const target = launch.payload[CLAIM.targetLinkUri]
   if (!target) return null
-  const url = new URL(target, env().APP_URL)
+  const url = new URL(target, baseUrl)
   const match = /^\/play\/([0-9a-f-]{36})$/.exec(url.pathname)
-  return url.origin === new URL(env().APP_URL).origin && match && UUID.test(match[1]!) ? match[1]! : null
+  return url.origin === new URL(baseUrl).origin && match && UUID.test(match[1]!) ? match[1]! : null
 }
 
 /** Hands over to /lti/session (a same-site request, carrying the ticket cookie), which signs in and goes on to `next`. */
@@ -46,11 +45,11 @@ function handOff(ticket: string, next: string): Response {
   })
 }
 
-async function resourceLaunch(siteId: string, launch: VerifiedLaunch, userId: string): Promise<string> {
+async function resourceLaunch(siteId: string, baseUrl: string, launch: VerifiedLaunch, userId: string): Promise<string> {
   const p = launch.payload
   const link = p[CLAIM.resourceLink]
   if (!link) throw new LtiLaunchError('bad_claims', 'The launch has no resource link.')
-  const requested = challengeOf(launch)
+  const requested = challengeOf(launch, baseUrl)
   if (!requested) throw new LtiLaunchError('bad_claims', 'This LMS link does not point at a challenge on this site.')
   const ags = p[CLAIM.ags]
   const lineitem = ags?.scope.includes(AGS_SCORE_SCOPE) ? (ags.lineitem ?? null) : null
@@ -101,10 +100,11 @@ export async function POST(request: Request) {
   if (!idToken || !state) return ltiError('The launch is missing its token.')
   const cookieState = (await cookies()).get(LTI_STATE_COOKIE)?.value
   try {
-    const site = await currentSite()
+    const ctx = await siteContextForRequest(request)
+    const site = ctx.site
     const launch = await verifyLaunch(db(), site.id, { idToken, state, cookieState })
     const userId = await linkLtiUser(db(), site.id, launch.platform.id, launch.payload.sub, displayName(launch.payload))
-    const next = launch.payload[CLAIM.messageType] === 'LtiDeepLinkingRequest' ? await deepLinkingLaunch(site.id, launch, userId) : await resourceLaunch(site.id, launch, userId)
+    const next = launch.payload[CLAIM.messageType] === 'LtiDeepLinkingRequest' ? await deepLinkingLaunch(site.id, launch, userId) : await resourceLaunch(site.id, ctx.baseUrl, launch, userId)
     return handOff(await createLtiTicket(db(), userId), next)
   } catch (err) {
     if (err instanceof LtiLaunchError || err instanceof ValidationError) return ltiError(err.message)

@@ -1,6 +1,6 @@
 import { attachProviderRef, createPayment } from '@challengeforge/db'
 import { db } from '@/server/db'
-import { env } from '@/server/env'
+import { siteContextForRequest } from '@/server/site'
 import { text } from '@/server/body'
 import { fail, ok } from '@/server/http'
 import { paymentProvider } from '@/server/payments'
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const { user } = await currentScope()
     if (!user) return fail(403, 'forbidden', 'Sign in first.')
     const payment = await createPayment(db(), scope, text(body, 'productId', 64), provider.id)
-    const base = env().APP_URL
+    const base = (await siteContextForRequest(request)).baseUrl
     try {
       const checkout = await provider.createCheckout({
         paymentId: payment.id,

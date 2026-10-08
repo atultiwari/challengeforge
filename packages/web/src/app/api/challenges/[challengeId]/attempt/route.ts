@@ -7,7 +7,7 @@ import { currentScope } from '@/server/scope'
 
 /** Starts (or resumes) the learner's attempt. `{ "preview": true }` lets an author play the latest draft. */
 export async function POST(request: Request, ctx: { params: Promise<{ challengeId: string }> }) {
-  if (!sameOrigin(request)) return fail(403, 'bad_origin', 'Request refused.')
+  if (!(await sameOrigin(request))) return fail(403, 'bad_origin', 'Request refused.')
   try {
     const { challengeId } = await ctx.params
     const body = (await readJson(request)) as { preview?: unknown } | null

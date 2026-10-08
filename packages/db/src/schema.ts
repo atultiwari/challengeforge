@@ -298,6 +298,8 @@ export interface Database {
   setup_tokens: SetupTokensTable
   notifications: NotificationsTable
   mail_preferences: MailPreferencesTable
+  site_domains: SiteDomainsTable
+  network_admins: NetworkAdminsTable
 }
 
 export type PackAccess = 'open' | 'restricted'
@@ -487,6 +489,17 @@ export interface MailPreferencesTable {
   user_id: string
   updates: Bool
   updated_at: Timestamp
+}
+
+export interface SiteDomainsTable {
+  host: string
+  site_id: string
+  created_at: Timestamp
+}
+
+export interface NetworkAdminsTable {
+  user_id: string
+  created_at: Timestamp
 }
 
 export interface SetupTokensTable {

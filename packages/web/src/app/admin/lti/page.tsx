@@ -3,7 +3,7 @@ import { listPlatforms } from '@challengeforge/db'
 import { PostButton } from '@/components/common/PostButton'
 import { SimpleForm } from '@/components/common/SimpleForm'
 import { db } from '@/server/db'
-import { env } from '@/server/env'
+import { currentSiteContext } from '@/server/site'
 import { requirePageRole } from '@/server/guards'
 
 export const metadata = { title: 'LMS (LTI 1.3)' }
@@ -11,7 +11,7 @@ export const metadata = { title: 'LMS (LTI 1.3)' }
 export default async function LtiAdminPage() {
   const scope = await requirePageRole('admin', '/admin/lti')
   const platforms = await listPlatforms(db(), scope)
-  const app = env().APP_URL
+  const app = (await currentSiteContext()).baseUrl
   const toolUrls: [string, string][] = [
     ['Login (initiate login) URL', `${app}/lti/login`],
     ['Redirect / launch URL', `${app}/lti/launch`],

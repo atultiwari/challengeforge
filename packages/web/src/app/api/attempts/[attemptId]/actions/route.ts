@@ -18,7 +18,7 @@ const ERROR_STATUS: Readonly<Record<string, number>> = {
  * key makes a client retry (e.g. after a shared-host timeout) safe.
  */
 export async function POST(request: Request, ctx: { params: Promise<{ attemptId: string }> }) {
-  if (!sameOrigin(request)) return fail(403, 'bad_origin', 'Request refused.')
+  if (!(await sameOrigin(request))) return fail(403, 'bad_origin', 'Request refused.')
   try {
     const { attemptId } = await ctx.params
     const body = (await readJson(request)) as { action?: unknown; idempotencyKey?: unknown } | null

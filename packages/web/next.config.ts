@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   transpilePackages: ['@challengeforge/db', '@challengeforge/engine', '@challengeforge/llm-gateway', '@challengeforge/services', '@challengeforge/types'],
   poweredByHeader: false,
+  // Development only: the dev server serves its scripts to these extra hosts too (the multi-site E2E uses 127.0.0.1).
+  allowedDevOrigins: ['127.0.0.1'],
   async headers() {
     return [
       {

@@ -1,7 +1,7 @@
 import { consumeDeepLinkRequest, getDeepLinkRequest, getPlatform, listPlayable, SCORE_MAXIMUM } from '@challengeforge/db'
 import { deepLinkResponse, ensureToolKey } from '@challengeforge/services'
 import { db } from '@/server/db'
-import { env } from '@/server/env'
+import { siteContextForRequest } from '@/server/site'
 import { sameOrigin } from '@/server/http'
 import { escapeHtml, ltiError, ltiPage, ltiSecret } from '@/server/lti'
 import { currentScope } from '@/server/scope'
@@ -15,7 +15,7 @@ const MAX_ITEMS = 50
  */
 export async function POST(request: Request, ctx: { params: Promise<{ requestId: string }> }) {
   const { requestId } = await ctx.params
-  if (!sameOrigin(request)) return ltiError('Request refused.', 403)
+  if (!(await sameOrigin(request))) return ltiError('Request refused.', 403)
   const { scope } = await currentScope()
   if (!scope.principal) return ltiError('Your session has ended. Start again from your course.', 401)
   const pending = await getDeepLinkRequest(db(), scope.siteId, requestId, scope.principal.userId)
@@ -26,7 +26,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ requestId:
   if (!platform || !platform.active) return ltiError('This LMS is no longer registered with this site.')
   // Sign first, then spend the request: a signing failure must not force the teacher to start over.
   const key = await ensureToolKey(db(), scope.siteId, ltiSecret())
-  const jwt = await deepLinkResponse(key, platform, { deploymentId: pending.deploymentId, data: pending.data, appUrl: env().APP_URL, items, scoreMaximum: SCORE_MAXIMUM })
+  const jwt = await deepLinkResponse(key, platform, { deploymentId: pending.deploymentId, data: pending.data, appUrl: (await siteContextForRequest(request)).baseUrl, items, scoreMaximum: SCORE_MAXIMUM })
   if (!(await consumeDeepLinkRequest(db(), requestId))) return ltiError('This request was already used. Start again from your course.', 409)
   const target = new URL(pending.returnUrl)
   const body = `<h1>${items.length === 0 ? 'Nothing chosen' : `Adding ${items.length} activit${items.length === 1 ? 'y' : 'ies'}`}</h1>

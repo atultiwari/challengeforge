@@ -17,6 +17,7 @@ async function prepare() {
     execFileSync('pnpm', ['--filter', '@challengeforge/cli', 'cf', ...args], { env: { ...process.env, ...E2E_ENV, ADMIN_PASSWORD: E2E_ADMIN.password }, stdio: 'inherit' })
   cli('migrate')
   cli('create-admin', '--email', E2E_ADMIN.email, '--name', 'E2E Admin')
+  cli('grant-network-admin', '--email', E2E_ADMIN.email)
   cli('import-pack', path.resolve(import.meta.dirname, 'fixtures/pack'), '--publish')
   cli('import-pack', path.resolve(import.meta.dirname, 'fixtures/premium'), '--publish')
   cli('import-pack', path.resolve(import.meta.dirname, '../../../examples/packs/clinical-demo'), '--publish')

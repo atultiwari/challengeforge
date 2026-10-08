@@ -8,6 +8,7 @@
  *   challengeforge publish-pack <slug>     publish every challenge in an imported pack
  *   challengeforge create-admin            create (or promote) the site's administrator
  *   challengeforge setup-token             print a one-hour token for the /setup wizard (fresh sites only)
+ *   challengeforge grant-network-admin     let an account create sites and attach domains (multi-site)
  *   challengeforge reset-password          set a new password (from NEW_PASSWORD) and sign the person out
  *   challengeforge run-jobs                advance background jobs (run from cron every few minutes)
  *   challengeforge export-pack <slug> <dir> write a pack (latest versions + assets) to a directory
@@ -15,7 +16,7 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { Command } from 'commander'
-import { advanceJob, closeStaleReservations, createDb, createSetupToken, needsSetup, purgeExpiredLti, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
+import { advanceJob, closeStaleReservations, createDb, createSetupToken, findSiteBySlug, grantNetworkAdminUnchecked, needsSetup, userIdByEmail, purgeExpiredLti, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
 import { createMailer, createServiceRunners, mailConfigFromEnv, sendDueLtiScores, sendDueNotifications, servicesConfigFromEnv } from '@challengeforge/services'
 import { registry } from '@challengeforge/types'
 import { loadConfig } from './config'
@@ -109,11 +110,26 @@ program
   )
 
 program
+  .command('grant-network-admin')
+  .requiredOption('--email <email>', 'an existing account')
+  .description('Let this account create sites and attach domains at /network (multi-site installs)')
+  .action((options: { email: string }) =>
+    withDb(async (db) => {
+      const userId = await userIdByEmail(db, options.email)
+      if (!userId) throw new ValidationError('No account has that email. Sign up on the site first.')
+      await grantNetworkAdminUnchecked(db, userId)
+      process.stdout.write(`${options.email} is now a network admin. Open /network on any site.\n`)
+    }),
+  )
+
+program
   .command('setup-token')
+  .option('--site <slug>', 'the site to set up (default: SITE_SLUG)')
   .description('Print a one-hour token for the browser setup wizard at /setup (only while the site has no admin)')
-  .action(() =>
+  .action((options: { site?: string }) =>
     withDb(async (db, config) => {
-      const site = await ensureSite(db, config.siteSlug, config.siteName)
+      const site = options.site ? await findSiteBySlug(db, options.site) : await ensureSite(db, config.siteSlug, config.siteName)
+      if (!site) throw new ValidationError(`No site "${options.site}".`)
       if (!(await needsSetup(db, site.id))) {
         process.stdout.write('This site already has an admin; the setup wizard is closed.\n')
         return

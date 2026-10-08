@@ -32,6 +32,8 @@ const LABELS: Record<AuditRecord['action'], string> = {
   'lti.platform_saved': 'Registered or enabled an LMS',
   'lti.platform_removed': 'Disabled an LMS',
   'site.settings_saved': 'Changed site settings',
+  'site.created': 'Created this site',
+  'site.domain_added': 'Added a domain',
 }
 
 /** Details as short "key: value" pairs; values are shown as text, never as markup. */

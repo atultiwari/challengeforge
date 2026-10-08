@@ -16,7 +16,7 @@ import { SimpleForm } from '@/components/common/SimpleForm'
 import { ProgressGridTable } from '@/components/teach/ProgressGridTable'
 import { StatsTable } from '@/components/analytics/StatsTable'
 import { db } from '@/server/db'
-import { env } from '@/server/env'
+import { currentSiteContext } from '@/server/site'
 import { requirePageRole } from '@/server/guards'
 
 export const metadata = { title: 'Cohort' }
@@ -44,7 +44,7 @@ export default async function CohortPage({ params }: { params: Promise<{ cohortI
   const scope = await requirePageRole('learner', `/teach/cohorts/${cohortId}`)
   const { cohort, assignments, members, grid, packs, challenges, stats } = await load(scope, cohortId)
   const api = `/api/cohorts/${cohortId}`
-  const joinUrl = `${env().APP_URL}/join?code=${cohort.joinCode}`
+  const joinUrl = `${(await currentSiteContext()).baseUrl}/join?code=${cohort.joinCode}`
   const targets = [
     ...packs.map((p) => [`pack:${p.id}`, `Pack: ${p.title}`] as const),
     ...challenges.map((c) => [`challenge:${c.id}`, `Challenge: ${c.title}`] as const),

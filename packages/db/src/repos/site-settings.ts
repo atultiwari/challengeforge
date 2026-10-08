@@ -43,6 +43,8 @@ export async function saveSiteSettings(db: Db, scope: Scope, current: SiteSettin
       .values({ site_id: scope.siteId, settings: toJson(parsed.data), updated_at: now })
       .onDuplicateKeyUpdate({ settings: toJson(parsed.data), updated_at: now })
       .execute()
+    // Keep the site row's name in step: it names the site in auth emails and the network list.
+    await trx.updateTable('sites').set({ name: parsed.data.name }).where('id', '=', scope.siteId).execute()
     await recordAudit(trx, scope, { action: 'site.settings_saved', targetType: 'site', targetId: scope.siteId, details: { changed: Object.keys(changes) } })
   })
   return parsed.data

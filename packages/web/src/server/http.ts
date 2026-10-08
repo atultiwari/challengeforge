@@ -1,6 +1,6 @@
 import 'server-only'
 import { ForbiddenError, NotFoundError, ValidationError } from '@challengeforge/db'
-import { env } from './env'
+import { siteContextForRequest } from './site'
 
 /** The one response envelope every API route uses (success, data, error). */
 export interface ApiEnvelope<T> {
@@ -22,9 +22,9 @@ export function fail(status: number, code: string, message: string, issues?: rea
  * CSRF defence for state-changing requests: browsers always send Origin on
  * POST, and it must be this site. (Session cookies are also SameSite=Lax.)
  */
-export function sameOrigin(request: Request): boolean {
+export async function sameOrigin(request: Request): Promise<boolean> {
   const origin = request.headers.get('origin')
-  return origin !== null && origin === new URL(env().APP_URL).origin
+  return origin !== null && origin === new URL((await siteContextForRequest(request)).baseUrl).origin
 }
 
 /** Maps domain errors to HTTP; anything unexpected is logged and hidden. */

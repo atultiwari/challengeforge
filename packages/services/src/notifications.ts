@@ -4,7 +4,7 @@
  * these emails off. Nothing is sent to people who opted out, to LMS
  * placeholder addresses, or when the site has no outgoing mail.
  */
-import { claimDueNotifications, failNotification, finishNotification, siteDisplayName, type Db, type DueNotification } from '@challengeforge/db'
+import { claimDueNotifications, failNotification, finishNotification, siteBaseUrl, siteDisplayName, type Db, type DueNotification } from '@challengeforge/db'
 import { linkMessage, type MailMessage, type Mailer } from './mail'
 
 const BATCH = 50
@@ -48,10 +48,12 @@ export function notificationMessage(n: DueNotification, siteName: string, appUrl
 }
 
 /** Sends every due notification once; failures back off and retry. Returns counts. */
+/** `appUrl` is the install's default address; sites with their own domain get links to it (multi-site). */
 export async function sendDueNotifications(db: Db, mailer: Mailer, appUrl: string, options: { now?: Date; limit?: number } = {}): Promise<{ sent: number; skipped: number; failed: number }> {
   const now = options.now ?? new Date()
   const counts = { sent: 0, skipped: 0, failed: 0 }
   const siteNames = new Map<string, string>()
+  const siteUrls = new Map<string, string>()
   for (const n of await claimDueNotifications(db, options.limit ?? BATCH, now)) {
     if (!mailer.enabled || !n.wantsUpdates || n.email.endsWith('@lti.invalid')) {
       await finishNotification(db, n.id, 'skipped', now)
@@ -64,7 +66,12 @@ export async function sendDueNotifications(db: Db, mailer: Mailer, appUrl: strin
         siteName = await siteDisplayName(db, n.siteId)
         siteNames.set(n.siteId, siteName)
       }
-      await mailer.send(notificationMessage(n, siteName, appUrl))
+      let siteUrl = siteUrls.get(n.siteId)
+      if (!siteUrl) {
+        siteUrl = await siteBaseUrl(db, n.siteId, appUrl)
+        siteUrls.set(n.siteId, siteUrl)
+      }
+      await mailer.send(notificationMessage(n, siteName, siteUrl))
       await finishNotification(db, n.id, 'sent', now)
       counts.sent += 1
     } catch (err) {

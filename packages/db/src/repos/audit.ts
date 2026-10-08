@@ -35,6 +35,8 @@ export type AuditAction =
   | 'lti.platform_saved'
   | 'lti.platform_removed'
   | 'site.settings_saved'
+  | 'site.created'
+  | 'site.domain_added'
 
 export interface AuditEntry {
   action: AuditAction

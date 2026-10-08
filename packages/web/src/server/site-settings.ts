@@ -3,13 +3,12 @@ import { cache } from 'react'
 import { headers } from 'next/headers'
 import { getSiteSettings, type SiteSettings } from '@challengeforge/db'
 import { db } from './db'
-import { env } from './env'
 import { currentSite } from './scope'
 
 /** This site's settings, once per request. The environment only provides the defaults. */
 export const currentSettings = cache(async (): Promise<SiteSettings> => {
   const site = await currentSite()
-  return getSiteSettings(db(), site.id, { name: env().SITE_NAME })
+  return getSiteSettings(db(), site.id, { name: site.name })
 })
 
 /** The CSP nonce the proxy issued for this request, for our own <style> tag. */

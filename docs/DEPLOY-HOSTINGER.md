@@ -181,7 +181,21 @@ LMS users get their own accounts here, linked to their LMS identity. An
 existing account is never matched by email. A course placement unlocks its
 pack for the learners it launches, even if the pack is restricted.
 
-## 9. Upgrades
+## 9. More than one site (optional)
+
+One installation can serve several sites, like WordPress multisite. Each site
+has its own people, content, look and settings; accounts are shared.
+
+1. Make yourself a **network admin** (SSH, once):
+   `node cli.mjs grant-network-admin --email you@example.com`.
+2. Point the extra domain at the same Node.js app. Hostinger calls this an
+   alias or parked domain. Whether your plan allows it is **not yet verified**.
+   If it doesn't, run a separate installation per site instead.
+3. Open **/network** and create the site with its domain and its first admin.
+4. Send the cron job's mail links per site: no change needed. Each site's
+   links use its own domain.
+
+## 10. Upgrades
 
 1. `pnpm release` locally.
 2. Upload the new archive in hPanel.
@@ -191,7 +205,7 @@ pack for the learners it launches, even if the pack is restricted.
 Attempts in progress are pinned to the version they started on, so publishing
 changes never disturbs a learner mid-attempt.
 
-## 10. Backups
+## 11. Backups
 
 The database holds everything, including uploaded datasets and case files.
 
@@ -204,7 +218,7 @@ The database holds everything, including uploaded datasets and case files.
 
 - **Test a restore** into a scratch database once, before you need it.
 
-## 11. Operating notes
+## 12. Operating notes
 
 - **Cold starts.** Hostinger stops idle Node apps and starts them on the next
   request. The first page after a quiet period can take a few seconds.

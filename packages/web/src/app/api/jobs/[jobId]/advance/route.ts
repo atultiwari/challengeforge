@@ -11,7 +11,7 @@ import { currentScope } from '@/server/scope'
  * so no request ever runs long, then returns the job and the attempt.
  */
 export async function POST(request: Request, ctx: { params: Promise<{ jobId: string }> }) {
-  if (!sameOrigin(request)) return fail(403, 'bad_origin', 'Request refused.')
+  if (!(await sameOrigin(request))) return fail(403, 'bad_origin', 'Request refused.')
   try {
     const { jobId } = await ctx.params
     const { scope } = await currentScope()

@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers'
-import { auth } from '@/server/auth'
+import { authForRequest } from '@/server/auth'
 import { clearTicketCookie, LTI_TICKET_COOKIE, ltiError } from '@/server/lti'
 import { safeNext } from '@/lib/safe-next'
 
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const next = safeNext(url.searchParams.get('next'))
   let signedIn: Response
   try {
-    signedIn = await auth().api.ltiSignIn({ body: { ticket }, headers: request.headers, asResponse: true })
+    signedIn = await (await authForRequest(request)).api.ltiSignIn({ body: { ticket }, headers: request.headers, asResponse: true })
   } catch {
     return ltiError('This sign-in link has expired. Open the activity again from your course.', 401)
   }

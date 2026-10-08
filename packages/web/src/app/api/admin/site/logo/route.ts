@@ -6,7 +6,7 @@ import { currentSettings } from '@/server/site-settings'
 
 /** Uploads (multipart "logo") or, with an empty form, removes the site logo. Admins only. */
 export async function POST(request: Request) {
-  if (!sameOrigin(request)) return fail(403, 'bad_origin', 'Request refused.')
+  if (!(await sameOrigin(request))) return fail(403, 'bad_origin', 'Request refused.')
   if (Number(request.headers.get('content-length') ?? 0) > MAX_SITE_FILE_BYTES + 16_384) return fail(413, 'too_large', 'The image must be under 512 KB.')
   try {
     const { scope } = await currentScope()
