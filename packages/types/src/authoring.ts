@@ -9,18 +9,33 @@ import { DiagnosticSimDefSchema } from './diagnostic-sim'
 import { starterDiagnosticSim } from './diagnostic-sim/starter'
 import { QuestionSetDefSchema } from './question-set'
 import { emptyQuestionSet } from './question-set-draft'
+import { OrderingDefSchema } from './ordering'
 
-export const FORM_AUTHORED_TYPES = ['question-set', 'diagnostic-sim'] as const
+export const FORM_AUTHORED_TYPES = ['question-set', 'diagnostic-sim', 'ordering'] as const
 export type FormAuthoredType = (typeof FORM_AUTHORED_TYPES)[number]
 
 const SCHEMAS: Record<FormAuthoredType, z.ZodType> = {
   'question-set': QuestionSetDefSchema,
   'diagnostic-sim': DiagnosticSimDefSchema,
+  ordering: OrderingDefSchema,
 }
 
 const STARTERS: Record<FormAuthoredType, () => unknown> = {
   'question-set': emptyQuestionSet,
   'diagnostic-sim': starterDiagnosticSim,
+  ordering: () => ({
+    title: 'New ordering challenge',
+    intro: 'Put these steps in the order you would do them.',
+    steps: [
+      { id: 'first', text: 'The first step', explanation: '' },
+      { id: 'second', text: 'The second step', explanation: '' },
+      { id: 'third', text: 'The third step', explanation: '' },
+    ],
+    critical_pairs: [],
+    pass_fraction: 0.7,
+    scoring: { base_points: 100 },
+    debrief: '',
+  }),
 }
 
 export const isFormAuthored = (typeId: string): typeId is FormAuthoredType => (FORM_AUTHORED_TYPES as readonly string[]).includes(typeId)

@@ -35,6 +35,7 @@ describe('one contract, both paradigms', () => {
       'question-set@1:static',
       'chat-mission@1:interactive',
       'prompt-hardening@1:interactive',
+      'ordering@1:static',
     ])
   })
 

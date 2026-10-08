@@ -62,7 +62,7 @@ judgement call made without the owner (review in one pass)._
 - **S2, xAPI: done.** Statements for the site or a cohort as JSON downloads, and an optional LRS that cron sends new statements to.
 - **S3, simulated patient: done.** Learners can ask the patient in their own words. It's grounded in the case's history list, and grading still uses what was revealed. Turned on in the demo case.
 - **S4, WordPress connector: done.** A plugin with a shortcode, and single sign-on with signed, single-use tokens and members linked by WordPress id.
-- **S5:** type SDK.
+- **S5, type SDK: done.** `docs/TYPE-SDK.md`, `pnpm new-type`, and a new built-in `ordering` type as the worked example.
 
 ## Waiting on the owner
 

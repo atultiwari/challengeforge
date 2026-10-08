@@ -23,6 +23,7 @@ export default async function AuthorHome() {
           <h1 className="text-4xl">Your challenges</h1>
         </div>
         <Link href="/author/new" className="btn-secondary">New question set</Link>
+        <Link href="/author/new?type=ordering" className="btn-secondary">New ordering challenge</Link>
         <Link href="/author/new?type=diagnostic-sim" className="btn-primary">New diagnostic case</Link>
       </header>
       {challenges.length === 0 ? (

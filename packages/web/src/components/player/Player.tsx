@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AttemptSnapshot } from '@challengeforge/db'
-import type { ChatMissionView, DiagnosticSimView, LabLegacyView, PromptHardeningView, QuestionSetView } from '@challengeforge/types'
+import type { ChatMissionView, DiagnosticSimView, LabLegacyView, OrderingView, PromptHardeningView, QuestionSetView } from '@challengeforge/types'
 import { postJson } from '@/lib/api'
 import { AssessmentSummary } from './AssessmentSummary'
 import { ChatMissionPlayer } from './ChatMissionPlayer'
@@ -9,8 +9,9 @@ import { PromptHardeningPlayer } from './PromptHardeningPlayer'
 import { DiagnosticSimPlayer } from './diagnostic/DiagnosticSimPlayer'
 import { LabLegacyPlayer } from './LabLegacyPlayer'
 import { QuestionSetPlayer } from './QuestionSetPlayer'
+import { OrderingPlayer } from './OrderingPlayer'
 
-const PLAYABLE_TYPES = new Set(['lab-legacy', 'question-set', 'diagnostic-sim', 'chat-mission', 'prompt-hardening'])
+const PLAYABLE_TYPES = new Set(['lab-legacy', 'question-set', 'diagnostic-sim', 'chat-mission', 'prompt-hardening', 'ordering'])
 /** How often the page advances a background job (each call runs one bounded slice). */
 const JOB_POLL_MS = 1500
 const MAX_POLL_FAILURES = 6
@@ -137,6 +138,7 @@ export function Player({ challengeId, title, preview, initial }: Props) {
       {snapshot.typeId === 'prompt-hardening' && (
         <PromptHardeningPlayer key={snapshot.attemptId} view={snapshot.view as PromptHardeningView} pendingJob={snapshot.pendingJob} send={send} busy={busy} />
       )}
+      {snapshot.typeId === 'ordering' && <OrderingPlayer key={snapshot.attemptId} view={snapshot.view as OrderingView} send={send} busy={busy} />}
       {!PLAYABLE_TYPES.has(snapshot.typeId) && (
         <p className="card">This kind of challenge cannot be played in this version yet.</p>
       )}

@@ -19,7 +19,8 @@
     "test:db:mariadb": "TEST_DB_URL=mysql://root:devroot@127.0.0.1:33062 vitest run -c vitest.db.config.ts",
     "dev": "pnpm --filter @challengeforge/web dev",
     "cf": "pnpm --filter @challengeforge/cli cf",
-    "release": "node scripts/build-release.mjs"
+    "release": "node scripts/build-release.mjs",
+    "new-type": "node scripts/new-type.mjs"
   },
   "devDependencies": {
     "@types/node": "^22",

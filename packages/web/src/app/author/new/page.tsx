@@ -7,7 +7,7 @@ import { requirePageRole } from '@/server/guards'
 
 export const metadata = { title: 'New challenge' }
 
-const TITLES: Record<string, string> = { 'question-set': 'New question set', 'diagnostic-sim': 'New diagnostic case' }
+const TITLES: Record<string, string> = { 'question-set': 'New question set', 'diagnostic-sim': 'New diagnostic case', ordering: 'New ordering challenge' }
 
 export default async function NewChallenge({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
   const { type = 'question-set' } = await searchParams
