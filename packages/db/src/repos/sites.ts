@@ -2,6 +2,7 @@ import type { Db } from '../client'
 import { newId } from '../ids'
 import { ForbiddenError, NotFoundError, requireRole, type Principal, type Scope } from '../scope'
 import type { Role } from '../schema'
+import { recordAudit } from './audit'
 
 export interface Site {
   id: string
@@ -73,11 +74,17 @@ export async function setRole(db: Db, scope: Scope, userId: string, role: Role):
   if (admin.userId === userId && role !== 'admin') {
     throw new ForbiddenError('You cannot remove your own admin role.')
   }
-  const result = await db
-    .updateTable('memberships')
-    .set({ role })
-    .where('site_id', '=', scope.siteId)
-    .where('user_id', '=', userId)
-    .executeTakeFirst()
-  if (Number(result.numUpdatedRows) === 0) throw new NotFoundError('That person is not a member of this site.')
+  await db.transaction().execute(async (trx) => {
+    const current = await trx
+      .selectFrom('memberships')
+      .select('role')
+      .where('site_id', '=', scope.siteId)
+      .where('user_id', '=', userId)
+      .forUpdate()
+      .executeTakeFirst()
+    if (!current) throw new NotFoundError('That person is not a member of this site.')
+    if (current.role === role) return
+    await trx.updateTable('memberships').set({ role }).where('site_id', '=', scope.siteId).where('user_id', '=', userId).execute()
+    await recordAudit(trx, scope, { action: 'role.changed', targetType: 'user', targetId: userId, details: { from: current.role, to: role } })
+  })
 }

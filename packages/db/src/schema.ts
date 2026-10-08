@@ -269,6 +269,19 @@ export interface Database {
   llm_usage: LlmUsageTable
   llm_credentials: LlmCredentialsTable
   jobs: JobsTable
+  audit_log: AuditLogTable
+}
+
+export interface AuditLogTable {
+  id: string
+  site_id: string
+  /** A user id, or `system:<source>` for the CLI and webhooks. */
+  actor_id: string
+  action: string
+  target_type: string
+  target_id: string
+  details: ColumnType<unknown, string | null, string | null>
+  created_at: Timestamp
 }
 
 /** Generated is unused today (all ids are app-generated); kept for future auto columns. */

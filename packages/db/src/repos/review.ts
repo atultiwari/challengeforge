@@ -7,6 +7,7 @@
 import type { Db } from '../client'
 import { toBool } from '../json'
 import { NotFoundError, requireRole, type Scope } from '../scope'
+import { recordAudit } from './audit'
 
 export interface ReviewItem {
   attemptId: string
@@ -100,5 +101,6 @@ export async function overrideAssessment(db: Db, scope: Scope, attemptId: string
       .where('attempt_id', '=', attemptId)
       .execute()
     await recomputeProgress(trx, scope.siteId, attempt.userId, attempt.challengeId)
+    await recordAudit(trx, scope, { action: 'assessment.overridden', targetType: 'attempt', targetId: attemptId, details: { passed: override.passed, points: override.passed ? points : 0 } })
   })
 }

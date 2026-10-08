@@ -12,9 +12,11 @@
     "@challengeforge/db": "workspace:*",
     "@challengeforge/engine": "workspace:*",
     "@challengeforge/llm-gateway": "workspace:*",
+    "nodemailer": "^10.0.16",
     "zod": "^4.1.0"
   },
   "devDependencies": {
-    "@challengeforge/types": "workspace:^"
+    "@challengeforge/types": "workspace:^",
+    "@types/nodemailer": "^8.0.2"
   }
 }

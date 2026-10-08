@@ -10,6 +10,7 @@ import type { Db } from './client'
 import { canonicalJson, fromJson } from './json'
 import { createChallenge, publish, saveDraftVersion, upsertPack, upsertSection } from './repos/content'
 import { assetProblems, putAsset } from './repos/assets'
+import { recordAudit } from './repos/audit'
 import { ValidationError, requireRole, type Scope } from './scope'
 
 const Slug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,99}$/, 'Use lowercase letters, digits and hyphens.')
@@ -213,5 +214,7 @@ export async function importPack(
       report.published.push(entry.slug)
     }
   }
+  const { packId: _id, ...counts } = report
+  await recordAudit(db, scope, { action: 'pack.imported', targetType: 'pack', targetId: packId, details: { slug: manifest.slug, ...counts } }, 'cli')
   return report
 }

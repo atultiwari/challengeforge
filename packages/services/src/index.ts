@@ -161,3 +161,4 @@ export function createServiceRunners(db: Db, config: ServicesConfig): { runServi
   return { runService, runJobSlice }
 }
 export { servicesConfigFromEnv } from './config'
+export * from './mail'

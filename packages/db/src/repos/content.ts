@@ -10,6 +10,7 @@ import { fromJson, toJson } from '../json'
 import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireRole, type Scope } from '../scope'
 import type { ChallengeStatus } from '../schema'
 import { withDeadlockRetry } from '../tx'
+import { recordAudit } from './audit'
 
 export interface ChallengeSummary {
   id: string
@@ -205,6 +206,7 @@ export async function publish(db: Db, scope: Scope, challengeId: string): Promis
         .set({ status: 'published', published_version_id: latest.id, updated_at: new Date() })
         .where('id', '=', challengeId)
         .execute()
+      await recordAudit(trx, scope, { action: 'challenge.published', targetType: 'challenge', targetId: challengeId, details: { versionId: latest.id } }, 'cli')
     }),
   )
 }
@@ -218,6 +220,7 @@ export async function archive(db: Db, scope: Scope, challengeId: string): Promis
     .where('site_id', '=', scope.siteId)
     .executeTakeFirst()
   if (Number(result.numUpdatedRows) === 0) throw new NotFoundError('Challenge not found.')
+  await recordAudit(db, scope, { action: 'challenge.archived', targetType: 'challenge', targetId: challengeId }, 'cli')
 }
 
 const summaryColumns = [
