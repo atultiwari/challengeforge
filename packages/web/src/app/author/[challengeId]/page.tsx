@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ForbiddenError, NotFoundError, getForAuthoring, hasRole, listCollaborators } from '@challengeforge/db'
 import { authoringSchema, isFormAuthored, type QuestionSetDef } from '@challengeforge/types'
@@ -30,6 +31,7 @@ export default async function EditChallenge({
       <header>
         <p className="eyebrow">{challenge.typeId}</p>
         <h1 className="text-4xl">{challenge.title}</h1>
+        {challenge.publishedVersionId && <p className="mt-2 text-sm"><Link className="underline" href={`/author/${challenge.id}/analytics`}>How learners do on this challenge</Link></p>}
       </header>
       {saved && (
         <p role="status" className="rounded-md bg-good-soft px-4 py-2 text-sm text-good">

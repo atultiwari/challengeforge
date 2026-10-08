@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import {
   ForbiddenError,
   NotFoundError,
+  cohortAnalytics,
   cohortProgress,
   listAssignments,
   listCohortMembers,
@@ -13,6 +14,7 @@ import {
 import { PostButton } from '@/components/common/PostButton'
 import { SimpleForm } from '@/components/common/SimpleForm'
 import { ProgressGridTable } from '@/components/teach/ProgressGridTable'
+import { StatsTable } from '@/components/analytics/StatsTable'
 import { db } from '@/server/db'
 import { env } from '@/server/env'
 import { requirePageRole } from '@/server/guards'
@@ -22,14 +24,15 @@ export const metadata = { title: 'Cohort' }
 async function load(scope: Parameters<typeof requireCohortManager>[1], cohortId: string) {
   try {
     const cohort = await requireCohortManager(db(), scope, cohortId)
-    const [assignments, members, grid, packs, challenges] = await Promise.all([
+    const [assignments, members, grid, packs, challenges, stats] = await Promise.all([
       listAssignments(db(), scope, cohortId),
       listCohortMembers(db(), scope, cohortId),
       cohortProgress(db(), scope, cohortId),
       listPacks(db(), scope),
       listPlayable(db(), scope),
+      cohortAnalytics(db(), scope, cohortId),
     ])
-    return { cohort, assignments, members, grid, packs, challenges }
+    return { cohort, assignments, members, grid, packs, challenges, stats }
   } catch (err) {
     if (err instanceof NotFoundError || err instanceof ForbiddenError) notFound()
     throw err
@@ -39,7 +42,7 @@ async function load(scope: Parameters<typeof requireCohortManager>[1], cohortId:
 export default async function CohortPage({ params }: { params: Promise<{ cohortId: string }> }) {
   const { cohortId } = await params
   const scope = await requirePageRole('learner', `/teach/cohorts/${cohortId}`)
-  const { cohort, assignments, members, grid, packs, challenges } = await load(scope, cohortId)
+  const { cohort, assignments, members, grid, packs, challenges, stats } = await load(scope, cohortId)
   const api = `/api/cohorts/${cohortId}`
   const joinUrl = `${env().APP_URL}/join?code=${cohort.joinCode}`
   const targets = [
@@ -69,8 +72,20 @@ export default async function CohortPage({ params }: { params: Promise<{ cohortI
       </section>
 
       <section className="space-y-3" aria-labelledby="progress">
-        <h2 id="progress" className="text-2xl">Progress</h2>
+        <div className="flex flex-wrap items-baseline gap-3">
+          <h2 id="progress" className="mr-auto text-2xl">Progress</h2>
+          <a className="text-sm underline" href={`/api/cohorts/${cohortId}/progress/csv`}>Download progress (CSV)</a>
+        </div>
         <ProgressGridTable grid={grid} />
+      </section>
+
+      <section className="space-y-3" aria-labelledby="insights">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <h2 id="insights" className="mr-auto text-2xl">Insights</h2>
+          <a className="text-sm underline" href={`/api/analytics/cohorts/${cohortId}/csv`}>Download insights (CSV)</a>
+        </div>
+        <p className="text-sm text-ink-muted">This cohort only. A criterion most of the class misses is a good topic for the next session.</p>
+        <StatsTable stats={stats} />
       </section>
 
       <section className="space-y-3" aria-labelledby="assignments">
