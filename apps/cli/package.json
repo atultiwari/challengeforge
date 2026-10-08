@@ -1,0 +1,19 @@
+{
+  "name": "@challengeforge/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Operator commands: migrate, import-pack, create-admin.",
+  "bin": {
+    "challengeforge": "./src/main.ts"
+  },
+  "scripts": {
+    "cf": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@challengeforge/db": "workspace:*",
+    "@challengeforge/engine": "workspace:*",
+    "@challengeforge/types": "workspace:*",
+    "commander": "^15.0.0"
+  }
+}
