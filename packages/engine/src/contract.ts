@@ -10,7 +10,7 @@
  * re-graded without calling a model again.
  */
 import type { z } from 'zod'
-import type { Assessment } from './assessment'
+import type { Assessment, PointsInput } from './assessment'
 import type { RuleContext } from './rules/types'
 
 export type Paradigm = 'static' | 'interactive'
@@ -85,7 +85,14 @@ export interface ChallengeType<Def, State, Action, View> {
    * answer key or rubric and re-running evaluate() re-grades past attempts.
    */
   evaluate(def: Def, trajectory: readonly AttemptEvent<Action>[], final: State, env: EvaluateEnv): Promise<Assessment>
+  /**
+   * Leaderboard inputs (base points, hints used, wrong attempts). Optional:
+   * types without it score `DEFAULT_BASE_POINTS` scaled by the assessment.
+   */
+  pointsInput?(def: Def, final: State): PointsInput
 }
+
+export const DEFAULT_BASE_POINTS = 100
 
 /** A type with its generics erased, for registries that hold many types. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

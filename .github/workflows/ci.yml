@@ -17,5 +17,31 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:all
-  # Phase 1 adds a database job here, run as a matrix over mysql:8.0 and
-  # mariadb:10.11 (PLAN.md §6.1), once packages/db exists.
+  database:
+    # Hostinger may give MariaDB rather than MySQL 8 (PLAN.md §6.1): test both.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['mysql:8.0', 'mariadb:10.11']
+    services:
+      db:
+        image: ${{ matrix.image }}
+        env:
+          MYSQL_ROOT_PASSWORD: ciroot
+          MARIADB_ROOT_PASSWORD: ciroot
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pciroot || mariadb-admin ping -h 127.0.0.1 -uroot -pciroot"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm vitest run -c vitest.db.config.ts
+        env:
+          TEST_DB_URL: mysql://root:ciroot@127.0.0.1:3306

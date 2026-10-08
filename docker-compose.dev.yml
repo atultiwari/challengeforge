@@ -1,0 +1,17 @@
+# Local databases for development and integration tests.
+# Both engines run, because Hostinger may give MariaDB rather than MySQL 8 (PLAN.md §6.1).
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: devroot
+      MYSQL_DATABASE: challengeforge
+    ports: ["127.0.0.1:33061:3306"]
+    tmpfs: ["/var/lib/mysql"]
+  mariadb:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: devroot
+      MARIADB_DATABASE: challengeforge
+    ports: ["127.0.0.1:33062:3306"]
+    tmpfs: ["/var/lib/mysql"]

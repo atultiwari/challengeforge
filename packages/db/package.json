@@ -1,0 +1,20 @@
+{
+  "name": "@challengeforge/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The only package that knows the database: Kysely + mysql2, migrations, scoped repositories, the atomic attempt service.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@challengeforge/engine": "workspace:*",
+    "kysely": "^0.29.6",
+    "mysql2": "^3.24.5",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@challengeforge/types": "workspace:^"
+  }
+}

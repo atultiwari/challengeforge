@@ -11,7 +11,12 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "check:boundaries": "node scripts/check-boundaries.mjs",
-    "check:all": "pnpm typecheck && pnpm check:boundaries && pnpm test:coverage"
+    "check:all": "pnpm typecheck && pnpm check:boundaries && pnpm test:coverage",
+    "db:up": "docker compose -f docker-compose.dev.yml up -d",
+    "db:down": "docker compose -f docker-compose.dev.yml down",
+    "test:db": "pnpm test:db:mysql && pnpm test:db:mariadb",
+    "test:db:mysql": "TEST_DB_URL=mysql://root:devroot@127.0.0.1:33061 vitest run -c vitest.db.config.ts",
+    "test:db:mariadb": "TEST_DB_URL=mysql://root:devroot@127.0.0.1:33062 vitest run -c vitest.db.config.ts"
   },
   "devDependencies": {
     "@types/node": "^22",
