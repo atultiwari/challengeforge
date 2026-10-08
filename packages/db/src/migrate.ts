@@ -20,6 +20,7 @@ import * as m0013 from './migrations/0013_setup'
 import * as m0014 from './migrations/0014_notifications'
 import * as m0015 from './migrations/0015_multisite'
 import * as m0016 from './migrations/0016_phase4_review'
+import * as m0017 from './migrations/0017_xapi'
 
 const MIGRATIONS: Record<string, Migration> = {
   '0001_init': m0001,
@@ -38,6 +39,7 @@ const MIGRATIONS: Record<string, Migration> = {
   '0014_notifications': m0014,
   '0015_multisite': m0015,
   '0016_phase4_review': m0016,
+  '0017_xapi': m0017,
 }
 
 function migratorFor(db: Db): Migrator {

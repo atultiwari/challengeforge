@@ -17,7 +17,7 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { Command } from 'commander'
 import { advanceJob, closeStaleReservations, createDb, createSetupToken, findSiteBySlug, grantNetworkAdminUnchecked, needsSetup, userIdByEmail, purgeExpiredLti, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
-import { createMailer, createServiceRunners, mailConfigFromEnv, sendDueLtiScores, sendDueNotifications, servicesConfigFromEnv } from '@challengeforge/services'
+import { createMailer, createServiceRunners, mailConfigFromEnv, pushToLrs, sendDueLtiScores, sendDueNotifications, servicesConfigFromEnv } from '@challengeforge/services'
 import { registry } from '@challengeforge/types'
 import { loadConfig } from './config'
 import { loadPackFromDirectory } from './pack-loader'
@@ -172,10 +172,12 @@ program
       const appUrl = process.env['APP_URL']?.replace(/\/$/, '')
       if (!appUrl) process.stderr.write('APP_URL is not set: notification emails stay queued until it is (see DEPLOY-HOSTINGER.md section 6).\n')
       const mail = appUrl ? await sendDueNotifications(db, createMailer(mailConfigFromEnv(process.env)), appUrl) : { sent: 0, skipped: 0, failed: 0 }
+      const xapi = appUrl && secret ? await pushToLrs(db, secret, appUrl) : { sent: 0, failed: 0 }
       process.stdout.write(
         `Advanced ${slices} job slices; closed ${closed} stale AI call reservations; ` +
           `sent ${scores.sent} LMS scores (${scores.failed} to retry); sent ${mail.sent} notification emails ` +
-          `(${mail.skipped} skipped, ${mail.failed} to retry); removed ${purged} expired LMS launch records.\n`,
+          `(${mail.skipped} skipped, ${mail.failed} to retry); sent ${xapi.sent} xAPI statements` +
+          `${xapi.failed ? ` (${xapi.failed} LRS to retry)` : ''}; removed ${purged} expired LMS launch records.\n`,
       )
     }),
   )

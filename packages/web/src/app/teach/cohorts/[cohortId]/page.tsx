@@ -83,6 +83,7 @@ export default async function CohortPage({ params }: { params: Promise<{ cohortI
         <div className="flex flex-wrap items-baseline gap-3">
           <h2 id="insights" className="mr-auto text-2xl">Insights</h2>
           <a className="text-sm underline" href={`/api/analytics/cohorts/${cohortId}/csv`}>Download insights (CSV)</a>
+          <a className="text-sm underline" href={`/api/cohorts/${cohortId}/xapi`}>Download learning records (xAPI)</a>
         </div>
         <p className="text-sm text-ink-muted">This cohort only. A criterion most of the class misses is a good topic for the next session.</p>
         <StatsTable stats={stats} />

@@ -59,7 +59,7 @@ judgement call made without the owner (review in one pass)._
 
 **Phase 5** ([plan](PHASE-5-PLAN.md)):
 - **S1, packs in the browser: done.** Upload and download `.zip`, plus install from a checksum-verified registry. The public registry is in `registry/`.
-- **S2:** xAPI export and an LRS.
+- **S2, xAPI: done.** Statements for the site or a cohort as JSON downloads, and an optional LRS that cron sends new statements to.
 - **S3:** LLM simulated patient.
 - **S4:** WordPress connector.
 - **S5:** type SDK.

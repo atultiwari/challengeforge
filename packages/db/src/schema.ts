@@ -300,6 +300,7 @@ export interface Database {
   mail_preferences: MailPreferencesTable
   site_domains: SiteDomainsTable
   network_admins: NetworkAdminsTable
+  lrs_endpoints: LrsEndpointsTable
 }
 
 export type PackAccess = 'open' | 'restricted'
@@ -489,6 +490,21 @@ export interface MailPreferencesTable {
   site_id: string
   user_id: string
   updates: Bool
+  updated_at: Timestamp
+}
+
+export interface LrsEndpointsTable {
+  site_id: string
+  endpoint: string
+  username: string
+  secret_sealed: string
+  enabled: Bool
+  attempts_cursor_at: NullableTimestamp
+  attempts_cursor_id: string | null
+  results_cursor_at: NullableTimestamp
+  results_cursor_id: string | null
+  last_error: string | null
+  last_sent_at: NullableTimestamp
   updated_at: Timestamp
 }
 
