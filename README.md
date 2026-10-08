@@ -7,7 +7,7 @@ learning** — CTF-style labs, graded exercises, quizzes, red-team drills — on
 The **Clinical AI Challenge Lab** becomes the first "challenge pack" that ships
 on it, rather than a one-off app. Anyone else can author their own packs.
 
-> Status: **Phase 0 complete** ([report](docs/PHASE-0-REPORT.md)); Phase 1 next. Read
+> Status: **Phase 1 complete** ([report](docs/PHASE-1-REPORT.md)); Phase 2 in progress. Read
 > [`docs/PLAN.md`](docs/PLAN.md) for the plan and
 > [`docs/PLAN-REVIEW.md`](docs/PLAN-REVIEW.md) for why it looks the way it does.
 

@@ -44,3 +44,15 @@ describe('clientIp', () => {
     expect(clientIp(new Headers())).toBe('unknown')
   })
 })
+
+describe('safeNext (post-sign-in redirect)', async () => {
+  const { safeNext } = await import('../src/lib/safe-next')
+  it('keeps same-site paths with their query', () => {
+    expect(safeNext('/play/abc?preview=1')).toBe('/play/abc?preview=1')
+  })
+  it('refuses anything that could leave the site', () => {
+    for (const bad of ['//evil.com', '/\\evil.com', 'https://evil.com', 'evil.com', '/\\/evil.com', null, '']) {
+      expect(safeNext(bad)).toBe('/')
+    }
+  })
+})

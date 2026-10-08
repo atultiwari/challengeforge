@@ -30,6 +30,7 @@ import { newId, newSeed } from '../ids'
 import { fromJson, toBool, toJson } from '../json'
 import { NotFoundError, hasRole, requireSignedIn, type Scope } from '../scope'
 import { getForAuthoring, getPlayable, loadVersionDefinition } from './content'
+import { withDeadlockRetry } from '../tx'
 
 export interface AttemptDeps {
   registry: TypeRegistry
@@ -144,10 +145,54 @@ async function snapshotOf(db: Db, deps: AttemptDeps, row: AttemptRow): Promise<A
   }
 }
 
+type Target = Awaited<ReturnType<typeof getPlayable>>
+
+/** What a learner may play (published) or an author may preview (latest draft); throws if neither. */
+async function resolveTarget(db: Db, scope: Scope, challengeId: string, preview: boolean): Promise<Target> {
+  return preview ? getForAuthoring(db, scope, challengeId) : getPlayable(db, scope, challengeId)
+}
+
+async function openAttemptRow(db: Db, scope: Scope, userId: string, challengeId: string, preview: boolean, target: Target) {
+  const open = await db
+    .selectFrom('attempts')
+    .select(ATTEMPT_COLUMNS)
+    .where('site_id', '=', scope.siteId)
+    .where('user_id', '=', userId)
+    .where('challenge_id', '=', challengeId)
+    .where('is_preview', '=', preview)
+    .where('status', '=', 'open')
+    .orderBy('started_at', 'desc')
+    .limit(1)
+    .executeTakeFirst()
+  // A preview resumes only if it is still on the latest draft.
+  return open && (!preview || open.challenge_version_id === target.versionId) ? open : null
+}
+
+/**
+ * The learner's open attempt on a challenge, or null. Never creates one, so
+ * it is safe on a page GET (a cross-site link cannot start attempts).
+ */
+export async function findOpenAttempt(
+  db: Db,
+  scope: Scope,
+  deps: AttemptDeps,
+  challengeId: string,
+  options: { preview?: boolean } = {},
+): Promise<AttemptSnapshot | null> {
+  const p = requireSignedIn(scope)
+  const preview = options.preview === true
+  const target = await resolveTarget(db, scope, challengeId, preview)
+  const row = await openAttemptRow(db, scope, p.userId, challengeId, preview, target)
+  return row ? snapshotOf(db, deps, row) : null
+}
+
 /**
  * Returns the learner's open attempt on a challenge, or starts one pinned to
  * the published version. `preview` lets an author play the latest draft;
  * preview attempts never count towards progress.
+ *
+ * Starts are serialised per person (their membership row is locked), so two
+ * tabs or a double click can never create two open attempts.
  */
 export async function startOrResume(
   db: Db,
@@ -158,54 +203,55 @@ export async function startOrResume(
 ): Promise<AttemptSnapshot> {
   const p = requireSignedIn(scope)
   const preview = options.preview === true
-  const target = preview ? await getForAuthoring(db, scope, challengeId) : await getPlayable(db, scope, challengeId)
-
-  const open = await db
-    .selectFrom('attempts')
-    .select(ATTEMPT_COLUMNS)
-    .where('site_id', '=', scope.siteId)
-    .where('user_id', '=', p.userId)
-    .where('challenge_id', '=', challengeId)
-    .where('is_preview', '=', preview)
-    .where('status', '=', 'open')
-    .orderBy('started_at', 'desc')
-    .limit(1)
-    .executeTakeFirst()
-  // A preview resumes only if it is still on the latest draft.
-  if (open && (!preview || open.challenge_version_id === target.versionId)) return snapshotOf(db, deps, open)
-
+  const target = await resolveTarget(db, scope, challengeId, preview)
   const type = typeFor(deps.registry, target.typeId, target.typeVersion)
-  const id = newId()
-  const seed = newSeed()
-  const ctx = { attemptId: id, userId: p.userId, challengeId, seed }
-  const { attempt } = startAttempt(type, target.definition, ctx)
-  const now = (deps.now ?? (() => new Date()))()
-  const row: AttemptRow = {
-    id,
-    user_id: p.userId,
-    challenge_id: challengeId,
-    challenge_version_id: target.versionId,
-    type_id: target.typeId,
-    type_version: target.typeVersion,
-    is_preview: preview,
-    seed,
-    seq: 0,
-    status: attempt.status,
-    state: attempt.state,
-  }
-  await db
-    .insertInto('attempts')
-    .values({
-      ...row,
-      is_preview: preview,
-      site_id: scope.siteId,
-      state: toJson(attempt.state),
-      started_at: now,
-      updated_at: now,
-      ended_at: attempt.status === 'terminal' ? now : null,
-    })
-    .execute()
-  return snapshotOf(db, deps, row)
+
+  return withDeadlockRetry(() =>
+    db.transaction().execute(async (trx) => {
+      await trx
+        .selectFrom('memberships')
+        .select('user_id')
+        .where('site_id', '=', scope.siteId)
+        .where('user_id', '=', p.userId)
+        .forUpdate()
+        .executeTakeFirst()
+      const open = await openAttemptRow(trx, scope, p.userId, challengeId, preview, target)
+      if (open) return snapshotOf(trx, deps, open)
+
+      const id = newId()
+      const seed = newSeed()
+      const { attempt } = startAttempt(type, target.definition, { attemptId: id, userId: p.userId, challengeId, seed })
+      const now = (deps.now ?? (() => new Date()))()
+      const row: AttemptRow = {
+        id,
+        user_id: p.userId,
+        challenge_id: challengeId,
+        challenge_version_id: target.versionId,
+        type_id: target.typeId,
+        type_version: target.typeVersion,
+        is_preview: preview,
+        seed,
+        seq: 0,
+        status: attempt.status,
+        state: attempt.state,
+      }
+      await trx
+        .insertInto('attempts')
+        .values({
+          ...row,
+          is_preview: preview,
+          site_id: scope.siteId,
+          state: toJson(attempt.state),
+          started_at: now,
+          updated_at: now,
+          ended_at: attempt.status === 'terminal' ? now : null,
+        })
+        .execute()
+      // A type whose attempt is over before any action still gets graded.
+      if (attempt.status === 'terminal') await recordAssessment(trx, scope, deps, type, target.definition, row, attempt, now)
+      return snapshotOf(trx, deps, row)
+    }),
+  )
 }
 
 /** Reads an attempt: its owner, or an admin reviewing it. */
@@ -217,21 +263,6 @@ export async function getAttempt(db: Db, scope: Scope, deps: AttemptDeps, attemp
   // Someone else's attempt is "not found", so ids cannot be probed.
   if (!row) throw new NotFoundError('Attempt not found.')
   return snapshotOf(db, deps, row)
-}
-
-const RETRYABLE_ERRNOS = new Set([1213 /* deadlock */, 1205 /* lock wait timeout */])
-const MAX_TX_ATTEMPTS = 3
-
-async function withDeadlockRetry<T>(work: () => Promise<T>): Promise<T> {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      return await work()
-    } catch (err) {
-      const errno = (err as { errno?: number }).errno
-      if (attempt >= MAX_TX_ATTEMPTS || errno === undefined || !RETRYABLE_ERRNOS.has(errno)) throw err
-      await new Promise((resolve) => setTimeout(resolve, 20 * attempt))
-    }
-  }
 }
 
 /** Applies one learner action atomically. Only the attempt's owner may act. */

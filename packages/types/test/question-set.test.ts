@@ -65,6 +65,17 @@ describe('question-set definition', () => {
     expect(questionSet.lint(zero).map((i) => i.path)).toContain('items')
   })
 
+  it('lint catches duplicate option ids and repeated correct answers', () => {
+    const dup = questionSet.definitionSchema.parse({
+      ...raw,
+      items: [
+        { ...raw.items[0], options: [{ id: 'x', text: 'A' }, { id: 'x', text: 'B' }], answer: 'x' },
+        { ...raw.items[1], answers: ['a', 'a'] },
+      ],
+    })
+    expect(questionSet.lint(dup).map((i) => i.path)).toEqual(expect.arrayContaining(['items.0.options', 'items.1.answers']))
+  })
+
   it('rejects a single-choice item with fewer than two options', () => {
     expect(questionSet.definitionSchema.safeParse({ ...raw, items: [{ ...raw.items[0], options: [{ id: 'x', text: 'x' }] }] }).success).toBe(false)
   })

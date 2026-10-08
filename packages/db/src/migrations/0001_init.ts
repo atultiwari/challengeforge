@@ -2,13 +2,16 @@
  * Initial schema. Written to the MySQL 8.0 ∩ MariaDB 10.6+ subset
  * (PLAN.md §6.1): JSON columns, DATETIME(3) in UTC, InnoDB, utf8mb4, and
  * app-generated CHAR(36) ids. Every content and play table carries site_id.
+ *
+ * MySQL DDL is not transactional, so every CREATE is IF NOT EXISTS: a run
+ * that failed half-way can simply be run again.
  */
 import { sql, type Kysely } from 'kysely'
 
 const TABLE_OPTIONS = sql.raw('ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci')
 
 const STATEMENTS = [
-  sql`CREATE TABLE sites (
+  sql`CREATE TABLE IF NOT EXISTS sites (
     id CHAR(36) NOT NULL PRIMARY KEY,
     slug VARCHAR(64) NOT NULL,
     name VARCHAR(200) NOT NULL,
@@ -17,7 +20,7 @@ const STATEMENTS = [
   ) ${TABLE_OPTIONS}`,
 
   // Better Auth core tables (its column names).
-  sql`CREATE TABLE \`user\` (
+  sql`CREATE TABLE IF NOT EXISTS \`user\` (
     id VARCHAR(36) NOT NULL PRIMARY KEY,
     name TEXT NOT NULL,
     email VARCHAR(255) NOT NULL,
@@ -27,7 +30,7 @@ const STATEMENTS = [
     updatedAt DATETIME(3) NOT NULL,
     UNIQUE KEY uq_user_email (email)
   ) ${TABLE_OPTIONS}`,
-  sql`CREATE TABLE session (
+  sql`CREATE TABLE IF NOT EXISTS session (
     id VARCHAR(36) NOT NULL PRIMARY KEY,
     expiresAt DATETIME(3) NOT NULL,
     token VARCHAR(255) NOT NULL,
@@ -40,7 +43,7 @@ const STATEMENTS = [
     KEY ix_session_user (userId),
     CONSTRAINT fk_session_user FOREIGN KEY (userId) REFERENCES \`user\`(id) ON DELETE CASCADE
   ) ${TABLE_OPTIONS}`,
-  sql`CREATE TABLE account (
+  sql`CREATE TABLE IF NOT EXISTS account (
     id VARCHAR(36) NOT NULL PRIMARY KEY,
     accountId TEXT NOT NULL,
     providerId TEXT NOT NULL,
@@ -57,7 +60,7 @@ const STATEMENTS = [
     KEY ix_account_user (userId),
     CONSTRAINT fk_account_user FOREIGN KEY (userId) REFERENCES \`user\`(id) ON DELETE CASCADE
   ) ${TABLE_OPTIONS}`,
-  sql`CREATE TABLE verification (
+  sql`CREATE TABLE IF NOT EXISTS verification (
     id VARCHAR(36) NOT NULL PRIMARY KEY,
     identifier VARCHAR(255) NOT NULL,
     value TEXT NOT NULL,
@@ -67,7 +70,7 @@ const STATEMENTS = [
     KEY ix_verification_identifier (identifier)
   ) ${TABLE_OPTIONS}`,
 
-  sql`CREATE TABLE memberships (
+  sql`CREATE TABLE IF NOT EXISTS memberships (
     site_id CHAR(36) NOT NULL,
     user_id VARCHAR(36) NOT NULL,
     role ENUM('learner','author','admin') NOT NULL,
@@ -78,7 +81,7 @@ const STATEMENTS = [
     CONSTRAINT fk_memberships_user FOREIGN KEY (user_id) REFERENCES \`user\`(id) ON DELETE CASCADE
   ) ${TABLE_OPTIONS}`,
 
-  sql`CREATE TABLE packs (
+  sql`CREATE TABLE IF NOT EXISTS packs (
     id CHAR(36) NOT NULL PRIMARY KEY,
     site_id CHAR(36) NOT NULL,
     slug VARCHAR(100) NOT NULL,
@@ -88,7 +91,7 @@ const STATEMENTS = [
     UNIQUE KEY uq_packs_site_slug (site_id, slug),
     CONSTRAINT fk_packs_site FOREIGN KEY (site_id) REFERENCES sites(id)
   ) ${TABLE_OPTIONS}`,
-  sql`CREATE TABLE pack_sections (
+  sql`CREATE TABLE IF NOT EXISTS pack_sections (
     id CHAR(36) NOT NULL PRIMARY KEY,
     pack_id CHAR(36) NOT NULL,
     slug VARCHAR(100) NOT NULL,
@@ -98,7 +101,7 @@ const STATEMENTS = [
     CONSTRAINT fk_sections_pack FOREIGN KEY (pack_id) REFERENCES packs(id) ON DELETE CASCADE
   ) ${TABLE_OPTIONS}`,
 
-  sql`CREATE TABLE challenges (
+  sql`CREATE TABLE IF NOT EXISTS challenges (
     id CHAR(36) NOT NULL PRIMARY KEY,
     site_id CHAR(36) NOT NULL,
     pack_id CHAR(36) NULL,
@@ -119,7 +122,7 @@ const STATEMENTS = [
     CONSTRAINT fk_challenges_pack FOREIGN KEY (pack_id) REFERENCES packs(id),
     CONSTRAINT fk_challenges_section FOREIGN KEY (section_id) REFERENCES pack_sections(id)
   ) ${TABLE_OPTIONS}`,
-  sql`CREATE TABLE challenge_versions (
+  sql`CREATE TABLE IF NOT EXISTS challenge_versions (
     id CHAR(36) NOT NULL PRIMARY KEY,
     challenge_id CHAR(36) NOT NULL,
     version INT NOT NULL,
@@ -130,7 +133,7 @@ const STATEMENTS = [
     CONSTRAINT fk_versions_challenge FOREIGN KEY (challenge_id) REFERENCES challenges(id) ON DELETE CASCADE
   ) ${TABLE_OPTIONS}`,
 
-  sql`CREATE TABLE assets (
+  sql`CREATE TABLE IF NOT EXISTS assets (
     id CHAR(36) NOT NULL PRIMARY KEY,
     site_id CHAR(36) NOT NULL,
     pack_id CHAR(36) NULL,
@@ -146,7 +149,7 @@ const STATEMENTS = [
     CONSTRAINT fk_assets_challenge FOREIGN KEY (challenge_id) REFERENCES challenges(id) ON DELETE CASCADE
   ) ${TABLE_OPTIONS}`,
 
-  sql`CREATE TABLE attempts (
+  sql`CREATE TABLE IF NOT EXISTS attempts (
     id CHAR(36) NOT NULL PRIMARY KEY,
     site_id CHAR(36) NOT NULL,
     user_id VARCHAR(36) NOT NULL,
@@ -168,7 +171,7 @@ const STATEMENTS = [
     CONSTRAINT fk_attempts_challenge FOREIGN KEY (challenge_id) REFERENCES challenges(id) ON DELETE CASCADE,
     CONSTRAINT fk_attempts_version FOREIGN KEY (challenge_version_id) REFERENCES challenge_versions(id)
   ) ${TABLE_OPTIONS}`,
-  sql`CREATE TABLE attempt_events (
+  sql`CREATE TABLE IF NOT EXISTS attempt_events (
     attempt_id CHAR(36) NOT NULL,
     seq INT NOT NULL,
     action JSON NOT NULL,
@@ -179,7 +182,7 @@ const STATEMENTS = [
     UNIQUE KEY uq_events_idempotency (attempt_id, idempotency_key),
     CONSTRAINT fk_events_attempt FOREIGN KEY (attempt_id) REFERENCES attempts(id) ON DELETE CASCADE
   ) ${TABLE_OPTIONS}`,
-  sql`CREATE TABLE assessments (
+  sql`CREATE TABLE IF NOT EXISTS assessments (
     attempt_id CHAR(36) NOT NULL PRIMARY KEY,
     criteria JSON NOT NULL,
     score DOUBLE NOT NULL,
@@ -193,7 +196,7 @@ const STATEMENTS = [
     updated_at DATETIME(3) NOT NULL,
     CONSTRAINT fk_assessments_attempt FOREIGN KEY (attempt_id) REFERENCES attempts(id) ON DELETE CASCADE
   ) ${TABLE_OPTIONS}`,
-  sql`CREATE TABLE progress (
+  sql`CREATE TABLE IF NOT EXISTS progress (
     site_id CHAR(36) NOT NULL,
     user_id VARCHAR(36) NOT NULL,
     challenge_id CHAR(36) NOT NULL,

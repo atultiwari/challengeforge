@@ -39,8 +39,11 @@ export function toResponse(err: unknown): Response {
 
 /** Reads a JSON body with a size cap; returns null when it is missing, too big or malformed. */
 export async function readJson(request: Request, maxBytes = 64 * 1024): Promise<unknown> {
+  // Refuse early on a declared size, then check the actual bytes received.
+  const declared = Number(request.headers.get('content-length') ?? '0')
+  if (declared > maxBytes) return null
   const text = await request.text()
-  if (text.length === 0 || text.length > maxBytes) return null
+  if (text.length === 0 || Buffer.byteLength(text, 'utf8') > maxBytes) return null
   try {
     return JSON.parse(text) as unknown
   } catch {

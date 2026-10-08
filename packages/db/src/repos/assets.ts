@@ -13,6 +13,31 @@ export const MAX_ASSET_BYTES = 15 * 1024 * 1024
 
 const SAFE_PATH = /^[a-z0-9][a-z0-9._/-]{0,299}$/i
 
+/**
+ * Types an asset may have. Anything that a browser could run as a page
+ * (HTML, SVG, XML) is refused, so a malicious pack cannot plant script on
+ * the site's own origin.
+ */
+export const ALLOWED_ASSET_TYPES: ReadonlySet<string> = new Set([
+  'application/json',
+  'text/csv',
+  'text/plain',
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+])
+
+/** Problems with an asset, in words an operator can act on; empty when it is acceptable. */
+export function assetProblems(asset: { path: string; contentType: string; size: number }): string[] {
+  const problems: string[] = []
+  if (!SAFE_PATH.test(asset.path) || asset.path.includes('..')) problems.push(`Unsafe asset path: ${asset.path}`)
+  if (!ALLOWED_ASSET_TYPES.has(asset.contentType)) problems.push(`Asset ${asset.path} has a type that is not allowed: ${asset.contentType}`)
+  if (asset.size > MAX_ASSET_BYTES) problems.push(`Asset ${asset.path} is larger than ${MAX_ASSET_BYTES} bytes.`)
+  return problems
+}
+
 export interface NewAsset {
   challengeId: string
   packId?: string | null
@@ -24,11 +49,14 @@ export interface NewAsset {
 
 export async function putAsset(db: Db, scope: Scope, asset: NewAsset): Promise<void> {
   requireRole(scope, 'admin')
-  if (!SAFE_PATH.test(asset.path) || asset.path.includes('..')) throw new Error(`Unsafe asset path: ${asset.path}`)
-  if (asset.bytes.length > MAX_ASSET_BYTES) throw new Error(`Asset ${asset.path} is larger than ${MAX_ASSET_BYTES} bytes.`)
+  const problems = assetProblems({ path: asset.path, contentType: asset.contentType, size: asset.bytes.length })
+  if (problems.length > 0) throw new Error(problems.join(' '))
   const challenge = await db.selectFrom('challenges').select('id').where('id', '=', asset.challengeId).where('site_id', '=', scope.siteId).executeTakeFirst()
   if (!challenge) throw new NotFoundError('Challenge not found.')
   const sha256 = createHash('sha256').update(asset.bytes).digest('hex')
+  const existing = await db.selectFrom('assets').select('sha256').where('challenge_id', '=', asset.challengeId).where('path', '=', asset.path).executeTakeFirst()
+  // Re-importing an unchanged pack should not rewrite megabytes of data.
+  if (existing?.sha256 === sha256) return
   await db
     .insertInto('assets')
     .values({
@@ -55,21 +83,30 @@ export interface AssetBody {
 
 /**
  * An asset of a PUBLISHED challenge, for a signed-in learner. Gated assets
- * (results revealed by play, Phase 2) are refused here; authors and admins
- * may read any asset of a challenge on their site.
+ * (results revealed by play, Phase 2) are refused. Admins may read any asset
+ * on their site; authors may also read every asset of their OWN challenges.
  */
 export async function getAssetForPlay(db: Db, scope: Scope, challengeId: string, path: string): Promise<AssetBody> {
-  requireSignedIn(scope)
-  const author = hasRole(scope, 'author')
-  let query = db
+  const p = requireSignedIn(scope)
+  const row = await db
     .selectFrom('assets')
     .innerJoin('challenges', 'challenges.id', 'assets.challenge_id')
-    .select(['assets.content_type as contentType', 'assets.bytes as bytes', 'assets.sha256 as sha256', 'assets.visibility as visibility'])
+    .select([
+      'assets.content_type as contentType',
+      'assets.bytes as bytes',
+      'assets.sha256 as sha256',
+      'assets.visibility as visibility',
+      'challenges.published_version_id as publishedVersionId',
+      'challenges.status as status',
+      'challenges.created_by as createdBy',
+    ])
     .where('assets.challenge_id', '=', challengeId)
     .where('assets.path', '=', path)
     .where('challenges.site_id', '=', scope.siteId)
-  if (!author) query = query.where('challenges.published_version_id', 'is not', null).where('challenges.status', '!=', 'archived')
-  const row = await query.executeTakeFirst()
-  if (!row || (row.visibility === 'gated' && !author)) throw new NotFoundError('Asset not found.')
+    .executeTakeFirst()
+  if (!row) throw new NotFoundError('Asset not found.')
+  const editor = hasRole(scope, 'admin') || (hasRole(scope, 'author') && row.createdBy === p.userId)
+  const playable = row.publishedVersionId !== null && row.status !== 'archived' && row.visibility === 'public'
+  if (!editor && !playable) throw new NotFoundError('Asset not found.')
   return { contentType: row.contentType, bytes: row.bytes, sha256: row.sha256 }
 }

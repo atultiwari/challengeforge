@@ -2,11 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth-client'
-
-/** Only same-site relative paths are followed after sign-in (no open redirects). */
-function safeNext(next: string | null): string {
-  return next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
-}
+import { safeNext } from '@/lib/safe-next'
 
 export function AuthForm({ mode, next }: { mode: 'sign-in' | 'sign-up'; next: string | null }) {
   const router = useRouter()

@@ -1,5 +1,6 @@
 'use client'
 import { changeItemType, nextId, type ItemType, type QuestionItem } from '@challengeforge/types'
+import { NumberField } from './NumberField'
 
 const TYPE_LABELS: Record<ItemType, string> = {
   single: 'Single choice',
@@ -71,17 +72,10 @@ function OptionsEditor({ item, onChange }: { item: Extract<QuestionItem, { type:
 function AnswerEditor({ item, onChange }: { item: QuestionItem; onChange: (item: QuestionItem) => void }) {
   if (item.type === 'single' || item.type === 'multi') return <OptionsEditor item={item} onChange={onChange} />
   if (item.type === 'numeric') {
-    const num = (v: string) => (v.trim() === '' || !Number.isFinite(Number(v)) ? 0 : Number(v))
     return (
       <div className="grid gap-3 sm:grid-cols-3">
-        <label className="block">
-          <span className="field-label">Correct value</span>
-          <input className="field-input" inputMode="decimal" value={item.value} onChange={(e) => onChange({ ...item, value: num(e.target.value) })} />
-        </label>
-        <label className="block">
-          <span className="field-label">Accepted ±</span>
-          <input className="field-input" inputMode="decimal" value={item.tolerance} onChange={(e) => onChange({ ...item, tolerance: Math.abs(num(e.target.value)) })} />
-        </label>
+        <NumberField label="Correct value" value={item.value} onChange={(value) => onChange({ ...item, value })} />
+        <NumberField label="Accepted ±" value={item.tolerance} min={0} onChange={(tolerance) => onChange({ ...item, tolerance })} />
         <label className="block">
           <span className="field-label">Unit (optional)</span>
           <input className="field-input" maxLength={20} value={item.unit ?? ''} onChange={(e) => onChange({ ...item, unit: e.target.value || undefined })} />
@@ -134,15 +128,7 @@ export function ItemEditor({ item, index, count, onChange, onMove, onRemove }: P
           <span className="field-label">Explanation (shown after the learner answers)</span>
           <textarea className="field-input min-h-16" maxLength={4000} value={item.explanation} onChange={(e) => onChange({ ...item, explanation: e.target.value })} />
         </label>
-        <label className="block">
-          <span className="field-label">Marks</span>
-          <input
-            className="field-input"
-            inputMode="decimal"
-            value={item.weight}
-            onChange={(e) => onChange({ ...item, weight: Math.max(0, Number(e.target.value) || 0) })}
-          />
-        </label>
+        <NumberField label="Marks" value={item.weight} min={0} onChange={(weight) => onChange({ ...item, weight })} />
       </div>
     </li>
   )

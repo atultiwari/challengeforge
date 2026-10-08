@@ -6,8 +6,14 @@ import { WorkflowControls } from '@/components/author/WorkflowControls'
 import { db } from '@/server/db'
 import { requirePageRole } from '@/server/guards'
 
-export default async function EditChallenge({ params }: { params: Promise<{ challengeId: string }> }) {
-  const { challengeId } = await params
+export default async function EditChallenge({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ challengeId: string }>
+  searchParams: Promise<{ saved?: string }>
+}) {
+  const [{ challengeId }, { saved }] = await Promise.all([params, searchParams])
   const scope = await requirePageRole('author', `/author/${challengeId}`)
   let challenge
   try {
@@ -22,6 +28,11 @@ export default async function EditChallenge({ params }: { params: Promise<{ chal
         <p className="eyebrow">{challenge.typeId}</p>
         <h1 className="text-4xl">{challenge.title}</h1>
       </header>
+      {saved && (
+        <p role="status" className="rounded-md bg-good-soft px-4 py-2 text-sm text-good">
+          Saved{saved === '1' ? '' : ` as version ${saved}`}. Learners keep the published version until you publish this one.
+        </p>
+      )}
       <WorkflowControls
         challengeId={challenge.id}
         status={challenge.status}

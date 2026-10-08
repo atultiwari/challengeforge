@@ -23,6 +23,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ challengeId
         etag: `"${asset.sha256}"`,
         'x-content-type-options': 'nosniff',
         'content-disposition': 'inline',
+        // Even if a browser rendered an asset as a document, it could run nothing.
+        'content-security-policy': "default-src 'none'; sandbox",
       },
     })
   } catch (err) {

@@ -1,5 +1,5 @@
 /** Reads a pack directory from disk; refuses any path that escapes it. */
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import type { LoadedPack, PackManifest } from '@challengeforge/db'
 

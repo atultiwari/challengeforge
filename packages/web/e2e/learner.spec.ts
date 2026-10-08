@@ -12,6 +12,7 @@ test('a new learner signs up, plays and passes, and sees their progress', async 
 
   // A question set: answer and pass.
   await page.getByRole('link', { name: /E2E arithmetic quiz/ }).click()
+  await page.getByRole('button', { name: 'Start' }).click()
   await page.getByLabel('Four').check()
   await page.getByLabel('Six times seven?').fill('42')
   await page.getByRole('button', { name: 'Submit answers' }).click()
@@ -20,6 +21,7 @@ test('a new learner signs up, plays and passes, and sees their progress', async 
   // A ported Lab mission: wrong first (feedback, no answer leaked), then right.
   await page.goto('/')
   await page.getByRole('link', { name: /E2E scenario mission/ }).click()
+  await page.getByRole('button', { name: 'Start' }).click()
   await page.getByLabel('Favourite colour').check()
   await page.getByRole('button', { name: /Submit/ }).click()
   await expect(page.getByText('That is not the answer we are looking for.')).toBeVisible()
@@ -27,6 +29,10 @@ test('a new learner signs up, plays and passes, and sees their progress', async 
   await page.getByLabel('Allergies').check()
   await page.getByRole('button', { name: /Submit/ }).click()
   await expect(page.getByText('Always ask about allergies.')).toBeVisible()
+
+  // Try again starts a clean attempt: nothing carried over from the last one.
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByLabel('Allergies')).not.toBeChecked()
 
   await page.goto('/')
   await expect(page.getByText(/Passed · 100 points/)).toBeVisible()
@@ -36,4 +42,12 @@ test('a new learner signs up, plays and passes, and sees their progress', async 
 test('signed-out visitors are sent to sign in, and cannot reach author pages', async ({ page }) => {
   await page.goto('/author')
   await expect(page).toHaveURL(/\/sign-in\?next=%2Fauthor/)
+})
+
+test('cross-site requests are refused, including sign-in', async ({ request }) => {
+  const res = await request.post('/api/auth/sign-in/email', {
+    headers: { origin: 'https://evil.example', 'content-type': 'application/json' },
+    data: { email: 'x@example.test', password: 'whatever-123' },
+  })
+  expect(res.status()).toBe(403)
 })

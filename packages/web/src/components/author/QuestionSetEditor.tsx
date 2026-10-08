@@ -1,18 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { newItem, type ItemType, type QuestionItem, type QuestionSetDef } from '@challengeforge/types'
-import { postJson, type ApiError } from '@/lib/api'
+import { postJson, requestJson } from '@/lib/api'
 import { IssuesList, type Issue } from './IssuesList'
 import { ItemEditor } from './ItemEditor'
 
 const LINT_DELAY_MS = 600
-
-async function putJson<T>(url: string, body: unknown) {
-  const res = await fetch(url, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-  const json = (await res.json()) as { success: boolean; data: T; error: ApiError | null }
-  return json.success ? { ok: true as const, data: json.data } : { ok: false as const, error: json.error ?? { code: 'unknown', message: 'Save failed.' } }
-}
 
 function move<T>(list: readonly T[], from: number, delta: number): T[] {
   const to = from + delta
@@ -33,11 +27,14 @@ export function QuestionSetEditor({ challengeId, initial }: { challengeId: strin
   const [issues, setIssues] = useState<Issue[]>([])
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  // Lint replies can arrive out of order; only the newest request may update the list.
+  const lintSeq = useRef(0)
 
   useEffect(() => {
     const timer = setTimeout(async () => {
+      const seq = ++lintSeq.current
       const r = await postJson<{ issues: Issue[] }>('/api/author/lint', { typeId: 'question-set', definition: def })
-      if (r.ok) setIssues(r.data.issues)
+      if (r.ok && seq === lintSeq.current) setIssues(r.data.issues)
     }, LINT_DELAY_MS)
     return () => clearTimeout(timer)
   }, [def])
@@ -50,7 +47,7 @@ export function QuestionSetEditor({ challengeId, initial }: { challengeId: strin
     setSaving(true)
     setMessage(null)
     const result = challengeId
-      ? await putJson<{ version: number }>(`/api/author/challenges/${challengeId}`, { definition: def })
+      ? await requestJson<{ version: number }>('PUT', `/api/author/challenges/${challengeId}`, { definition: def })
       : await postJson<{ id: string }>('/api/author/challenges', { typeId: 'question-set', definition: def })
     setSaving(false)
     if (!result.ok) {
@@ -58,11 +55,9 @@ export function QuestionSetEditor({ challengeId, initial }: { challengeId: strin
       if (result.error.issues) setIssues(result.error.issues as Issue[])
       return
     }
-    if (!challengeId && 'id' in result.data) {
-      router.push(`/author/${result.data.id}`)
-      return
-    }
-    setMessage('Saved as a new draft version.')
+    // The page shows the "saved" notice from the URL, so it survives the editor remounting on the new version.
+    if ('id' in result.data) router.push(`/author/${result.data.id}?saved=1`)
+    else router.replace(`/author/${challengeId}?saved=${result.data.version}`)
     router.refresh()
   }
 

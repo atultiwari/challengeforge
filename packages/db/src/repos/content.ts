@@ -9,6 +9,7 @@ import { newId } from '../ids'
 import { fromJson, toJson } from '../json'
 import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireRole, type Scope } from '../scope'
 import type { ChallengeStatus } from '../schema'
+import { withDeadlockRetry } from '../tx'
 
 export interface ChallengeSummary {
   id: string
@@ -146,12 +147,14 @@ export async function saveDraftVersion(db: Db, scope: Scope, registry: TypeRegis
   if (challenge.status === 'archived') throw new ForbiddenError('Archived challenges cannot be edited.')
   const definition = validated(registry, challenge.type_id, challenge.type_version, raw)
   const now = new Date()
-  return db.transaction().execute(async (trx) => {
+  return withDeadlockRetry(() => db.transaction().execute(async (trx) => {
+    // Lock the challenge row first: concurrent saves then queue here instead
+    // of racing (and deadlocking) on the version gap lock.
+    await trx.selectFrom('challenges').select('id').where('id', '=', challengeId).forUpdate().executeTakeFirst()
     const latest = await trx
       .selectFrom('challenge_versions')
       .select((eb) => eb.fn.max('version').as('v'))
       .where('challenge_id', '=', challengeId)
-      .forUpdate()
       .executeTakeFirst()
     const version = Number(latest?.v ?? 0) + 1
     await trx
@@ -164,7 +167,7 @@ export async function saveDraftVersion(db: Db, scope: Scope, registry: TypeRegis
       .where('id', '=', challengeId)
       .execute()
     return version
-  })
+  }))
 }
 
 export async function submitForReview(db: Db, scope: Scope, challengeId: string): Promise<void> {
@@ -173,25 +176,37 @@ export async function submitForReview(db: Db, scope: Scope, challengeId: string)
   await db.updateTable('challenges').set({ status: 'in_review', updated_at: new Date() }).where('id', '=', challengeId).execute()
 }
 
-/** Publishes the LATEST version. Admins only: they are the reviewers. */
+/**
+ * Publishes the LATEST version. Admins only: they are the reviewers, so they
+ * may also publish a draft directly. Locked, so a save in flight cannot
+ * leave the challenge pointing at an older version.
+ */
 export async function publish(db: Db, scope: Scope, challengeId: string): Promise<void> {
   requireRole(scope, 'admin')
-  const latest = await db
-    .selectFrom('challenge_versions')
-    .innerJoin('challenges', 'challenges.id', 'challenge_versions.challenge_id')
-    .select(['challenge_versions.id as id'])
-    .where('challenges.id', '=', challengeId)
-    .where('challenges.site_id', '=', scope.siteId)
-    .where('challenges.status', '!=', 'archived')
-    .orderBy('challenge_versions.version', 'desc')
-    .limit(1)
-    .executeTakeFirst()
-  if (!latest) throw new NotFoundError('Challenge not found.')
-  await db
-    .updateTable('challenges')
-    .set({ status: 'published', published_version_id: latest.id, updated_at: new Date() })
-    .where('id', '=', challengeId)
-    .execute()
+  await withDeadlockRetry(() =>
+    db.transaction().execute(async (trx) => {
+      const challenge = await trx
+        .selectFrom('challenges')
+        .select('status')
+        .where('id', '=', challengeId)
+        .where('site_id', '=', scope.siteId)
+        .forUpdate()
+        .executeTakeFirst()
+      if (!challenge || challenge.status === 'archived') throw new NotFoundError('Challenge not found.')
+      const latest = await trx
+        .selectFrom('challenge_versions')
+        .select('id')
+        .where('challenge_id', '=', challengeId)
+        .orderBy('version', 'desc')
+        .limit(1)
+        .executeTakeFirstOrThrow()
+      await trx
+        .updateTable('challenges')
+        .set({ status: 'published', published_version_id: latest.id, updated_at: new Date() })
+        .where('id', '=', challengeId)
+        .execute()
+    }),
+  )
 }
 
 export async function archive(db: Db, scope: Scope, challengeId: string): Promise<void> {

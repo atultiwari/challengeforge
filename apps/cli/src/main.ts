@@ -71,6 +71,7 @@ program
         .select(['challenges.id as id', 'challenges.slug as slug'])
         .where('packs.slug', '=', slug)
         .where('challenges.site_id', '=', site.id)
+        .where('challenges.status', '!=', 'archived')
         .execute()
       if (challenges.length === 0) throw new Error(`No challenges found in pack "${slug}".`)
       for (const c of challenges) await publish(db, systemScope(site.id), c.id)

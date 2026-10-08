@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation'
-import { notFound } from 'next/navigation'
-import { NotFoundError, startOrResume } from '@challengeforge/db'
+import { notFound, redirect } from 'next/navigation'
+import { ForbiddenError, NotFoundError, findOpenAttempt, getForAuthoring, getPlayable } from '@challengeforge/db'
 import { Player } from '@/components/player/Player'
 import { attemptDeps } from '@/server/attempt-deps'
 import { db } from '@/server/db'
@@ -14,14 +13,22 @@ export default async function PlayPage({
   searchParams: Promise<{ preview?: string }>
 }) {
   const [{ challengeId }, { preview }] = await Promise.all([params, searchParams])
+  const isPreview = preview === '1'
   const { scope } = await currentScope()
-  if (!scope.principal) redirect(`/sign-in?next=${encodeURIComponent(`/play/${challengeId}`)}`)
+  if (!scope.principal) {
+    const back = `/play/${challengeId}${isPreview ? '?preview=1' : ''}`
+    redirect(`/sign-in?next=${encodeURIComponent(back)}`)
+  }
   try {
-    // Opening the page resumes the learner's open attempt (or starts one): idempotent.
-    const snapshot = await startOrResume(db(), scope, attemptDeps, challengeId, { preview: preview === '1' })
-    return <Player challengeId={challengeId} initial={snapshot} />
+    // A GET only RESUMES an attempt; starting one is a POST (a link cannot start attempts).
+    const [challenge, open] = await Promise.all([
+      isPreview ? getForAuthoring(db(), scope, challengeId) : getPlayable(db(), scope, challengeId),
+      findOpenAttempt(db(), scope, attemptDeps, challengeId, { preview: isPreview }),
+    ])
+    return <Player challengeId={challengeId} title={challenge.title} preview={isPreview} initial={open} />
   } catch (err) {
-    if (err instanceof NotFoundError) notFound()
+    // Someone who may not see a challenge (or its draft) gets the same 404 as for one that does not exist.
+    if (err instanceof NotFoundError || err instanceof ForbiddenError) notFound()
     throw err
   }
 }

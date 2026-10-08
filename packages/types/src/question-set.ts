@@ -133,6 +133,12 @@ function lint(def: QuestionSetDef): LintIssue[] {
   def.items.forEach((item, i) => {
     if (seen.has(item.id)) issues.push({ path: `items.${i}.id`, severity: 'error', message: `The id "${item.id}" is used more than once.` })
     seen.add(item.id)
+    if ((item.type === 'single' || item.type === 'multi') && new Set(item.options.map((o) => o.id)).size !== item.options.length) {
+      issues.push({ path: `items.${i}.options`, severity: 'error', message: 'Two options share an id, so the answer key is ambiguous.' })
+    }
+    if (item.type === 'multi' && new Set(item.answers).size !== item.answers.length) {
+      issues.push({ path: `items.${i}.answers`, severity: 'error', message: 'A correct answer is listed twice.' })
+    }
     if (item.type === 'single' && !item.options.some((o) => o.id === item.answer)) {
       issues.push({ path: `items.${i}.answer`, severity: 'error', message: 'The correct answer must be one of the options.' })
     }

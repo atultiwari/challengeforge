@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   createChallenge,
+  findOpenAttempt,
   getForAuthoring,
   listMyProgress,
   performAction,
@@ -106,6 +107,29 @@ describe('playing an attempt', () => {
     await publish(t.db, s.admin, challengeId)
     const r = await performAction(t.db, who, deps, attemptId, RIGHT)
     expect(r).toMatchObject({ ok: true, snapshot: { status: 'terminal', assessment: { passed: true } } })
+  })
+
+  it('parallel starts (two tabs, a double click) create exactly one open attempt', async () => {
+    const learner = (await import('./harness')).createUser
+    const who = await learner(t.db, s.site.id, 'learner', 'twotabs')
+    const snapshots = await Promise.all([1, 2, 3, 4, 5].map(() => startOrResume(t.db, who, deps, challengeId)))
+    expect(new Set(snapshots.map((x) => x.attemptId)).size).toBe(1)
+    const open = await t.db.selectFrom('attempts').select('id').where('user_id', '=', who.principal!.userId).where('status', '=', 'open').execute()
+    expect(open).toHaveLength(1)
+  })
+
+  it('findOpenAttempt resumes without ever creating one', async () => {
+    const learner = (await import('./harness')).createUser
+    const who = await learner(t.db, s.site.id, 'learner', 'looker')
+    expect(await findOpenAttempt(t.db, who, deps, challengeId)).toBeNull()
+    const started = await startOrResume(t.db, who, deps, challengeId)
+    expect((await findOpenAttempt(t.db, who, deps, challengeId))?.attemptId).toBe(started.attemptId)
+  })
+
+  it('parallel draft saves get distinct version numbers', async () => {
+    const id = await createChallenge(t.db, s.author, registry, { slug: 'race-save', typeId: 'lab-legacy', typeVersion: 1, definition: quizMission })
+    const versions = await Promise.all([1, 2, 3, 4].map((n) => saveDraftVersion(t.db, s.author, registry, id, { ...quizMission, title: `v${n}` })))
+    expect([...versions].sort()).toEqual([2, 3, 4, 5])
   })
 
   it('author previews never count towards progress', async () => {

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { getAssetForPlay, importPack, listPlayable, listForAuthoring, type LoadedPack } from '../src'
+import { archive, getAssetForPlay, importPack, listPlayable, listForAuthoring, type LoadedPack } from '../src'
 import { freshDb, registry, setupSite, type TestDb } from './harness'
 import { quizMission } from './fixtures'
 
@@ -62,6 +62,29 @@ describe('importPack', () => {
   it('refuses invalid packs before writing anything', async () => {
     await expect(importPack(t.db, s.admin, registry, pack({}, { format: 2 }))).rejects.toThrow()
     await expect(importPack(t.db, s.admin, registry, pack({ 'challenges/one.json': { title: 'no rule' } }))).rejects.toMatchObject({ code: 'invalid' })
+  })
+
+  it('refuses to let one pack take over another pack\'s challenge', async () => {
+    const intruder = pack({ 'challenges/one.json': quizMission, 'assets/one.json': {} }, { slug: 'other-pack' })
+    await expect(importPack(t.db, s.admin, registry, intruder)).rejects.toThrow(/belongs to another pack/)
+  })
+
+  it('checks every asset before writing anything', async () => {
+    const missing: LoadedPack = { ...pack({ 'challenges/one.json': quizMission }), readBytes: () => { throw new Error('ENOENT: no such file') } }
+    await expect(importPack(t.db, s.admin, registry, missing)).rejects.toMatchObject({ code: 'invalid' })
+    const html = pack({ 'challenges/one.json': quizMission, 'assets/one.json': {} })
+    const withHtml: LoadedPack = {
+      ...html,
+      manifest: { ...html.manifest, challenges: [{ ...html.manifest.challenges[0]!, assets: [{ path: 'page.html', file: 'assets/one.json', content_type: 'text/html', visibility: 'public' }] }] },
+    }
+    await expect(importPack(t.db, s.admin, registry, withHtml)).rejects.toMatchObject({ code: 'invalid' })
+  })
+
+  it('skips archived challenges instead of failing the whole import', async () => {
+    const [mission] = await listForAuthoring(t.db, s.admin)
+    await archive(t.db, s.admin, mission!.id)
+    const report = await importPack(t.db, s.admin, registry, pack({ 'challenges/one.json': { ...quizMission, title: 'Again' }, 'assets/one.json': {} }), { publish: true })
+    expect(report).toMatchObject({ skipped: ['mission-one'], published: [] })
   })
 
   it('only admins import', async () => {
