@@ -18,6 +18,8 @@ export interface StripeConfig {
 
 interface StripeObject {
   id?: string
+  client_reference_id?: string | null
+  metadata?: Record<string, string> | null
   payment_status?: string
   amount_total?: number
   amount?: number
@@ -72,7 +74,8 @@ export function stripeProvider(config: StripeConfig, fetchImpl: FetchLike = fetc
       const event = JSON.parse(rawBody) as { id?: string; type?: string; data?: { object?: StripeObject } }
       const obj = event.data?.object ?? {}
       if (typeof event.id !== 'string') return null
-      const base = { provider: 'stripe', eventId: event.id }
+      const ourId = obj.client_reference_id ?? obj.metadata?.['payment_id']
+      const base = { provider: 'stripe', eventId: event.id, ...(ourId ? { paymentId: ourId } : {}) }
       switch (event.type) {
         case 'checkout.session.completed':
         case 'checkout.session.async_payment_succeeded':

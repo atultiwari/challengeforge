@@ -49,11 +49,17 @@ describe('review queue', () => {
     expect(queue).toEqual([expect.objectContaining({ attemptId, challengeTitle: 'Reviewed chat mission (synthetic)', learnerName: 'reviewee', passed: true })])
   })
 
-  it('an instructor can overturn a result, and the learner\'s progress follows', async () => {
+  it('a result waiting for review is not a pass until a reviewer decides, and the decision is what counts', async () => {
     const { who, attemptId } = await finishedAttempt('overturned')
-    expect(await listMyProgress(t.db, who)).toEqual([expect.objectContaining({ passed: true, bestPoints: 100 })])
+    // The automatic verdict was "pass", but it is provisional: no pass, no score yet (review fix).
+    expect(await listMyProgress(t.db, who)).toEqual([expect.objectContaining({ passed: false, bestPoints: 0, attempts: 1 })])
     await overrideAssessment(t.db, s.admin, attemptId, { passed: false, points: 0 })
     expect(await listMyProgress(t.db, who)).toEqual([expect.objectContaining({ passed: false, bestPoints: 0 })])
+    const second = await finishedAttempt('upheld')
+    await overrideAssessment(t.db, s.admin, second.attemptId, { passed: true, points: 80 })
+    expect(await listMyProgress(t.db, second.who)).toEqual([expect.objectContaining({ passed: true, bestPoints: 80 })])
+    // A second reviewer acting on the same result finds nothing waiting.
+    await expect(overrideAssessment(t.db, s.admin, second.attemptId, { passed: false, points: 0 })).rejects.toMatchObject({ code: 'not_found' })
     expect((await listReviewQueue(t.db, s.admin)).map((r) => r.attemptId)).not.toContain(attemptId)
   })
 

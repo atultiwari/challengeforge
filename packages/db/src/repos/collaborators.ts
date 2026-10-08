@@ -6,6 +6,7 @@
 import type { Db } from '../client'
 import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireRole, type Scope } from '../scope'
 import { recordAudit } from './audit'
+import { normaliseEmail, type EmailLookup } from './people'
 
 const MAX_COLLABORATORS = 20
 
@@ -56,14 +57,15 @@ export async function listCollaborators(db: Db, scope: Scope, challengeId: strin
 }
 
 /** Adds a co-author by email. They must already have an author (or higher) role on this site. */
-export async function addCollaborator(db: Db, scope: Scope, challengeId: string, email: string): Promise<Collaborator> {
+export async function addCollaborator(db: Db, scope: Scope, challengeId: string, email: string, lookup: EmailLookup = {}): Promise<Collaborator> {
   const challenge = await loadManaged(db, scope, challengeId)
   const person = await db
     .selectFrom('user')
     .innerJoin('memberships', 'memberships.user_id', 'user.id')
     .select(['user.id as userId', 'user.name as name', 'user.email as email', 'memberships.role as role'])
     .where('memberships.site_id', '=', scope.siteId)
-    .where('user.email', '=', email.trim().toLowerCase())
+    .where('user.email', '=', normaliseEmail(email))
+    .$if(lookup.verifiedOnly === true, (q) => q.where('user.emailVerified', '=', true))
     .executeTakeFirst()
   // One message for "no such person" and "not an author", so emails cannot be probed.
   if (!person || person.role === 'learner') throw new ValidationError('No author on this site has that email. An admin can make them an author first.')

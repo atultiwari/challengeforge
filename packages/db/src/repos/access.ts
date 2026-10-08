@@ -12,6 +12,7 @@ import { newId } from '../ids'
 import { NotFoundError, ValidationError, hasRole, requireRole, type Scope } from '../scope'
 import type { GrantSource, PackAccess } from '../schema'
 import { recordAudit } from './audit'
+import { normaliseEmail, type EmailLookup } from './people'
 import { canEdit } from './collaborators'
 
 export interface Grant {
@@ -156,7 +157,7 @@ export async function revokeFromSource(trx: Db, siteId: string, packId: string, 
 }
 
 /** An admin gives someone access to a pack, by email, optionally until a date. */
-export async function grantAccess(db: Db, scope: Scope, packId: string, email: string, expiresAt: Date | null = null): Promise<void> {
+export async function grantAccess(db: Db, scope: Scope, packId: string, email: string, expiresAt: Date | null = null, lookup: EmailLookup = {}): Promise<void> {
   requireRole(scope, 'admin')
   const pack = await db.selectFrom('packs').select('id').where('id', '=', packId).where('site_id', '=', scope.siteId).executeTakeFirst()
   if (!pack) throw new NotFoundError('Pack not found.')
@@ -166,7 +167,8 @@ export async function grantAccess(db: Db, scope: Scope, packId: string, email: s
     .innerJoin('memberships', 'memberships.user_id', 'user.id')
     .select('user.id as userId')
     .where('memberships.site_id', '=', scope.siteId)
-    .where('user.email', '=', email.trim().toLowerCase())
+    .where('user.email', '=', normaliseEmail(email))
+    .$if(lookup.verifiedOnly === true, (q) => q.where('user.emailVerified', '=', true))
     .executeTakeFirst()
   if (!person) throw new ValidationError('Nobody on this site has that email.')
   await db.transaction().execute(async (trx) => {

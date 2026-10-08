@@ -44,10 +44,12 @@ export interface ChallengeStats {
   criticalFailures: number
   /** Most-missed first. */
   criteria: CriterionStats[]
+  /** True when only the newest MAX_ATTEMPTS_PER_CHALLENGE attempts were counted. */
+  truncated: boolean
 }
 
-/** Enough for any one site; beyond this the numbers come from the newest attempts. */
-const MAX_ATTEMPTS = 20_000
+/** Per challenge: beyond this the numbers come from the newest attempts, and say so (`truncated`). */
+export const MAX_ATTEMPTS_PER_CHALLENGE = 5_000
 
 export function median(values: readonly number[]): number | null {
   if (values.length === 0) return null
@@ -68,8 +70,9 @@ interface AttemptFact {
   criteria: readonly Criterion[]
 }
 
-async function attemptFacts(db: Db, siteId: string, challengeIds: string[], userIds: string[] | null): Promise<AttemptFact[]> {
-  if (challengeIds.length === 0 || (userIds !== null && userIds.length === 0)) return []
+/** One challenge's attempts, newest first, at most MAX_ATTEMPTS_PER_CHALLENGE. */
+async function attemptFacts(db: Db, siteId: string, challengeId: string, userIds: string[] | null): Promise<AttemptFact[]> {
+  if (userIds !== null && userIds.length === 0) return []
   let query = db
     .selectFrom('attempts')
     .leftJoin('assessments', 'assessments.attempt_id', 'attempts.id')
@@ -86,9 +89,9 @@ async function attemptFacts(db: Db, siteId: string, challengeIds: string[], user
     ])
     .where('attempts.site_id', '=', siteId)
     .where('attempts.is_preview', '=', false)
-    .where('attempts.challenge_id', 'in', challengeIds)
+    .where('attempts.challenge_id', '=', challengeId)
   if (userIds !== null) query = query.where('attempts.user_id', 'in', userIds)
-  const rows = await query.orderBy('attempts.started_at', 'desc').limit(MAX_ATTEMPTS).execute()
+  const rows = await query.orderBy('attempts.started_at', 'desc').limit(MAX_ATTEMPTS_PER_CHALLENGE).execute()
   return rows.map((r) => ({
     challengeId: r.challengeId,
     userId: r.userId,
@@ -119,7 +122,8 @@ function criterionStats(facts: readonly AttemptFact[]): CriterionStats[] {
 
 function statsFor(challengeId: string, title: string, facts: readonly AttemptFact[]): ChallengeStats {
   const finished = facts.filter((f) => f.status === 'terminal' && f.passed !== null)
-  const passed = finished.filter((f) => f.passed)
+  // A result waiting for review is not a pass (yet).
+  const passed = finished.filter((f) => f.passed && f.assessmentStatus !== 'pending_review')
   const durations = finished.flatMap((f) => (f.endedAt ? [(f.endedAt.getTime() - f.startedAt.getTime()) / 60_000] : []))
   const med = median(durations)
   return {
@@ -135,12 +139,15 @@ function statsFor(challengeId: string, title: string, facts: readonly AttemptFac
     pendingReview: finished.filter((f) => f.assessmentStatus === 'pending_review').length,
     criticalFailures: finished.filter((f) => f.criticalFailure).length,
     criteria: criterionStats(finished),
+    truncated: facts.length >= MAX_ATTEMPTS_PER_CHALLENGE,
   }
 }
 
+/** One challenge at a time, so a busy challenge never crowds the others out and memory stays bounded. */
 async function summarise(db: Db, siteId: string, challenges: readonly { id: string; title: string }[], userIds: string[] | null): Promise<ChallengeStats[]> {
-  const facts = await attemptFacts(db, siteId, challenges.map((c) => c.id), userIds)
-  return challenges.map((c) => statsFor(c.id, c.title, facts.filter((f) => f.challengeId === c.id)))
+  const out: ChallengeStats[] = []
+  for (const c of challenges) out.push(statsFor(c.id, c.title, await attemptFacts(db, siteId, c.id, userIds)))
+  return out
 }
 
 /** One challenge's numbers: for its editors (authors, co-authors, editors, admins). */

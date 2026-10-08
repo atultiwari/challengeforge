@@ -19,6 +19,8 @@ export interface RazorpayConfig {
 
 interface Entity {
   id?: string
+  reference_id?: string
+  notes?: Record<string, string> | null
   amount?: number
   amount_paid?: number
   currency?: string
@@ -65,7 +67,8 @@ export function razorpayProvider(config: RazorpayConfig, fetchImpl: FetchLike = 
       const link = event.payload?.['payment_link']?.entity
       const payment = event.payload?.['payment']?.entity
       const refund = event.payload?.['refund']?.entity
-      const base = { provider: 'razorpay', eventId }
+      const ourId = link?.reference_id ?? link?.notes?.['payment_id']
+      const base = { provider: 'razorpay', eventId, ...(ourId ? { paymentId: ourId } : {}) }
       switch (event.event) {
         case 'payment_link.paid':
           if (!link?.id) return null

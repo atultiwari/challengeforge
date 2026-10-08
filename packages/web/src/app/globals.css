@@ -150,3 +150,26 @@ h1, h2 {
 .prose-cf ol { list-style: decimal; padding-left: 1.25rem; margin: 0.5rem 0; }
 .prose-cf strong { font-weight: 600; }
 .prose-cf a { color: var(--color-accent); text-decoration: underline; }
+
+/* Miss-rate bars in analytics (<meter class="miss-meter">), styled without inline styles (CSP). */
+.miss-meter {
+  width: 5rem;
+  height: 0.5rem;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--color-surface-sunken);
+}
+.miss-meter::-webkit-meter-bar {
+  background: var(--color-surface-sunken);
+  border: 0;
+  border-radius: 9999px;
+}
+.miss-meter::-webkit-meter-optimum-value,
+.miss-meter::-webkit-meter-suboptimum-value,
+.miss-meter::-webkit-meter-even-less-good-value {
+  background: var(--color-danger);
+  border-radius: 9999px;
+}
+.miss-meter::-moz-meter-bar {
+  background: var(--color-danger);
+}

@@ -1,29 +1,5 @@
-import { readdir, readFile } from 'node:fs/promises'
-import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { MAIL_OUTBOX } from './config'
-
-interface SentMail {
-  to: string
-  subject: string
-  text: string
-}
-
-/** The newest message sent to `to`, waiting for it to arrive (mail is sent in the background). */
-async function latestMailTo(to: string): Promise<SentMail> {
-  let found: SentMail | undefined
-  await expect
-    .poll(async () => {
-      const files = (await readdir(MAIL_OUTBOX).catch(() => [] as string[])).sort().reverse()
-      for (const file of files) {
-        const mail = JSON.parse(await readFile(path.join(MAIL_OUTBOX, file), 'utf8')) as SentMail
-        if (mail.to === to) return (found = mail)
-      }
-      return undefined
-    }, { timeout: 10_000 })
-    .toBeTruthy()
-  return found!
-}
+import { latestMailTo } from './helpers'
 
 test('a learner who forgot their password resets it by email, and the link works only once', async ({ page }) => {
   const email = `reset-${Date.now()}@example.test`

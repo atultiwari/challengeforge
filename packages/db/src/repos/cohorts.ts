@@ -8,9 +8,10 @@ import { randomInt } from 'node:crypto'
 import type { Db } from '../client'
 import { newId } from '../ids'
 import { toBool } from '../json'
-import { ForbiddenError, NotFoundError, ValidationError, requireSignedIn, type Scope } from '../scope'
+import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireSignedIn, type Scope } from '../scope'
 import type { CohortRole } from '../schema'
 import { recordAudit } from './audit'
+import { normaliseEmail, type EmailLookup } from './people'
 import { orgRoleOf, requireOrgRole } from './orgs'
 
 export interface Cohort {
@@ -72,7 +73,10 @@ export async function cohortAccess(db: Db, scope: Scope, cohortId: string): Prom
   if ((await orgRoleOf(db, scope, cohort.orgId)) === 'org_admin') return { access: 'manage', cohort }
   const member = await db.selectFrom('cohort_members').select('role').where('cohort_id', '=', cohortId).where('user_id', '=', scope.principal.userId).executeTakeFirst()
   if (!member) return null
-  return { access: member.role === 'instructor' ? 'manage' : 'learner', cohort }
+  if (member.role === 'learner') return { access: 'learner', cohort }
+  // An instructor seat counts only while they are still an instructor of the organisation.
+  const orgRole = await orgRoleOf(db, scope, cohort.orgId)
+  return orgRole === 'instructor' ? { access: 'manage', cohort } : null
 }
 
 export async function requireCohortManager(db: Db, scope: Scope, cohortId: string): Promise<Cohort> {
@@ -215,7 +219,7 @@ export async function removeCohortMember(db: Db, scope: Scope, cohortId: string,
 }
 
 /** Adds a co-instructor by email; they must belong to the organisation as an instructor or org admin. */
-export async function addCohortInstructor(db: Db, scope: Scope, cohortId: string, email: string): Promise<CohortPerson> {
+export async function addCohortInstructor(db: Db, scope: Scope, cohortId: string, email: string, lookup: EmailLookup = {}): Promise<CohortPerson> {
   const cohort = await requireCohortManager(db, scope, cohortId)
   const person = await db
     .selectFrom('org_members')
@@ -223,7 +227,8 @@ export async function addCohortInstructor(db: Db, scope: Scope, cohortId: string
     .select(['user.id as userId', 'user.name as name', 'user.email as email'])
     .where('org_members.org_id', '=', cohort.orgId)
     .where('org_members.role', 'in', ['instructor', 'org_admin'])
-    .where('user.email', '=', email.trim().toLowerCase())
+    .where('user.email', '=', normaliseEmail(email))
+    .$if(lookup.verifiedOnly === true, (q) => q.where('user.emailVerified', '=', true))
     .executeTakeFirst()
   if (!person) throw new ValidationError('No instructor in this organisation has that email.')
   await db
@@ -265,28 +270,35 @@ export async function assignmentsOf(db: Db, cohortId: string): Promise<Assignmen
 export async function addAssignment(db: Db, scope: Scope, cohortId: string, target: { packId?: string; challengeId?: string; dueAt?: Date | null }): Promise<Assignment> {
   await requireCohortManager(db, scope, cohortId)
   if (Boolean(target.packId) === Boolean(target.challengeId)) throw new ValidationError('Assign either a pack or a challenge.')
+  let restricted: boolean
   if (target.packId) {
-    const pack = await db.selectFrom('packs').select('id').where('id', '=', target.packId).where('site_id', '=', scope.siteId).executeTakeFirst()
+    const pack = await db.selectFrom('packs').select('access').where('id', '=', target.packId).where('site_id', '=', scope.siteId).executeTakeFirst()
     if (!pack) throw new NotFoundError('Pack not found.')
+    restricted = pack.access === 'restricted'
   } else {
     const challenge = await db
       .selectFrom('challenges')
-      .select('id')
-      .where('id', '=', target.challengeId!)
-      .where('site_id', '=', scope.siteId)
-      .where('published_version_id', 'is not', null)
-      .where('status', '!=', 'archived')
+      .leftJoin('packs', 'packs.id', 'challenges.pack_id')
+      .select('packs.access as access')
+      .where('challenges.id', '=', target.challengeId!)
+      .where('challenges.site_id', '=', scope.siteId)
+      .where('challenges.published_version_id', 'is not', null)
+      .where('challenges.status', '!=', 'archived')
       .executeTakeFirst()
     if (!challenge) throw new NotFoundError('Only published challenges can be assigned.')
+    restricted = challenge.access === 'restricted'
   }
+  // Assigning opens the content to everyone who joins: restricted (paid) content is the site's to give, not an instructor's.
+  if (restricted && !hasRole(scope, 'editor')) throw new ForbiddenError('This content is restricted. Ask a site editor or admin to assign it to your cohort.')
   const existing = await assignmentsOf(db, cohortId)
   if (existing.length >= MAX_ASSIGNMENTS) throw new ValidationError(`A cohort can have at most ${MAX_ASSIGNMENTS} assignments.`)
   if (existing.some((a) => (target.packId && a.packId === target.packId) || (target.challengeId && a.challengeId === target.challengeId))) {
     throw new ValidationError('That is already assigned.')
   }
   const id = newId()
-  await db
-    .insertInto('cohort_assignments')
+  try {
+    await db
+      .insertInto('cohort_assignments')
     .values({
       id,
       cohort_id: cohortId,
@@ -297,7 +309,11 @@ export async function addAssignment(db: Db, scope: Scope, cohortId: string, targ
       position: existing.length,
       created_at: new Date(),
     })
-    .execute()
+      .execute()
+  } catch (err) {
+    if ((err as { code?: string }).code === 'ER_DUP_ENTRY') throw new ValidationError('That is already assigned.')
+    throw err
+  }
   return (await assignmentsOf(db, cohortId)).find((a) => a.id === id)!
 }
 

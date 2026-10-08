@@ -10,6 +10,7 @@ export interface CurrentUser {
   id: string
   name: string
   email: string
+  emailVerified: boolean
 }
 
 /** The site this deployment serves (one per install in Phase 1; site_id is already everywhere). */
@@ -27,6 +28,6 @@ export const currentScope = cache(async (): Promise<{ scope: Scope; user: Curren
   const principal = await principalFor(db(), site.id, session.user.id)
   return {
     scope: { siteId: site.id, principal },
-    user: { id: session.user.id, name: session.user.name, email: session.user.email },
+    user: { id: session.user.id, name: session.user.name, email: session.user.email, emailVerified: Boolean(session.user.emailVerified) },
   }
 })

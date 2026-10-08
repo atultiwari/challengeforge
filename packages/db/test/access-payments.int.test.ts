@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   addAssignment,
   applyPaymentEvent,
+  PaymentNotFoundYetError,
   attachProviderRef,
   canPlay,
   createChallenge,
@@ -84,7 +85,11 @@ describe('pack access', () => {
     const cohort = await createCohort(t.db, teacher, org.id, 'Paid by the school')
     await joinCohort(t.db, student, cohort.joinCode)
     expect(await canPlay(t.db, student, lockedId)).toBe(false)
-    await addAssignment(t.db, teacher, cohort.id, { challengeId: lockedId })
+    // Restricted content is the site's to give: the instructor cannot assign it (review: free-access path)...
+    await expect(addAssignment(t.db, teacher, cohort.id, { challengeId: lockedId })).rejects.toMatchObject({ code: 'forbidden' })
+    await expect(addAssignment(t.db, teacher, cohort.id, { packId })).rejects.toMatchObject({ code: 'forbidden' })
+    // ...but a site admin can, for the school that licensed it.
+    await addAssignment(t.db, s.admin, cohort.id, { challengeId: lockedId })
     expect(await canPlay(t.db, student, lockedId)).toBe(true)
     await updateCohort(t.db, teacher, cohort.id, { archived: true })
     expect(await canPlay(t.db, student, lockedId)).toBe(false)
@@ -133,6 +138,28 @@ describe('payments', () => {
     expect(await applyPaymentEvent(t.db, { provider: 'mock', eventId: 'evt_3', type: 'paid', providerRef: 'cs_2', amountMinor: 100, currency: 'INR' })).toBe('rejected')
     expect((await getPayment(t.db, buyer, payment.id)).status).toBe('failed')
     expect(await canPlay(t.db, buyer, lockedId)).toBe(false)
+  })
+
+  it('a webhook that beats checkout is retried, never lost (review: lost payment events)', async () => {
+    const buyer = await createUser(t.db, s.site.id, 'learner', 'early-webhook')
+    const payment = await createPayment(t.db, buyer, productId, 'mock')
+    const early = { provider: 'mock', eventId: 'evt_early', type: 'paid' as const, providerRef: 'cs_early', paymentId: payment.id, amountMinor: 49900, currency: 'INR' }
+    // Our checkout id is not stored yet, but our own id came back with the event: it is found and applied.
+    expect(await applyPaymentEvent(t.db, early)).toBe('applied')
+    expect(await canPlay(t.db, buyer, lockedId)).toBe(true)
+    // A payment of ours that does not exist at all: roll back (the event is NOT marked seen) so the retry can succeed.
+    const ghost = { ...early, eventId: 'evt_ghost', paymentId: '00000000-0000-0000-0000-000000000000', providerRef: 'cs_ghost' }
+    await expect(applyPaymentEvent(t.db, ghost)).rejects.toBeInstanceOf(PaymentNotFoundYetError)
+    expect(await t.db.selectFrom('payment_events').select('event_id').where('event_id', '=', 'evt_ghost').executeTakeFirst()).toBeUndefined()
+  })
+
+  it('a paid event that does not state the amount grants nothing', async () => {
+    const buyer = await createUser(t.db, s.site.id, 'learner', 'no-amount')
+    const payment = await createPayment(t.db, buyer, productId, 'mock')
+    await attachProviderRef(t.db, payment.id, 'cs_noamount')
+    expect(await applyPaymentEvent(t.db, { provider: 'mock', eventId: 'evt_noamount', type: 'paid', providerRef: 'cs_noamount' })).toBe('rejected')
+    expect(await canPlay(t.db, buyer, lockedId)).toBe(false)
+    await expect(saveProduct(t.db, s.admin, { packId, priceMinor: 100, currency: 'JPY', active: true })).rejects.toMatchObject({ code: 'invalid' })
   })
 
   it('events for unknown payments, or from another provider, change nothing', async () => {

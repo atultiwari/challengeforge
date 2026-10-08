@@ -67,13 +67,14 @@ async function finallyPassed(db: Db, siteId: string, userId: string, challengeId
     .selectFrom('assessments')
     .innerJoin('attempts', 'attempts.id', 'assessments.attempt_id')
     .select('attempts.challenge_id as challengeId')
-    .distinct()
     .where('attempts.site_id', '=', siteId)
     .where('attempts.user_id', '=', userId)
     .where('attempts.is_preview', '=', false)
     .where('attempts.challenge_id', 'in', challengeIds)
     .where('assessments.passed', '=', true)
     .where('assessments.status', 'in', ['auto', 'overridden'])
+    // A locking read sees results other transactions committed meanwhile (a plain read would use this transaction's snapshot).
+    .forUpdate()
     .execute()
   return new Set(rows.map((r) => r.challengeId))
 }
@@ -96,6 +97,8 @@ export async function issueCertificateIfEarned(trx: Db, siteId: string, userId: 
 }
 
 async function issueForPack(trx: Db, siteId: string, userId: string, packId: string, packTitle: string, now: Date): Promise<string | null> {
+  // Serialise per learner: two results finishing the pack at once must not each miss the other's pass.
+  await trx.selectFrom('memberships').select('user_id').where('site_id', '=', siteId).where('user_id', '=', userId).forUpdate().executeTakeFirst()
   const existing = await trx.selectFrom('certificates').select('id').where('site_id', '=', siteId).where('user_id', '=', userId).where('pack_id', '=', packId).executeTakeFirst()
   if (existing) return null
   const required = await packChallengeIds(trx, packId)
@@ -103,9 +106,10 @@ async function issueForPack(trx: Db, siteId: string, userId: string, packId: str
   const passed = await finallyPassed(trx, siteId, userId, required)
   if (required.some((id) => !passed.has(id))) return null
   const [user, site] = await Promise.all([
-    trx.selectFrom('user').select('name').where('id', '=', userId).executeTakeFirstOrThrow(),
-    trx.selectFrom('sites').select('name').where('id', '=', siteId).executeTakeFirstOrThrow(),
+    trx.selectFrom('user').select('name').where('id', '=', userId).executeTakeFirst(),
+    trx.selectFrom('sites').select('name').where('id', '=', siteId).executeTakeFirst(),
   ])
+  if (!user || !site) return null
   const id = newCertificateId()
   const result = await trx
     .insertInto('certificates')

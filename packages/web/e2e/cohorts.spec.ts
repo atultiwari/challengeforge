@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { E2E_ADMIN } from './config'
-import { signIn, signUp } from './helpers'
+import { confirmEmail, signIn, signUp } from './helpers'
 
 const PASSWORD = 'e2e-password-12345'
 
@@ -9,6 +9,7 @@ test('an organisation runs a cohort: instructor assigns work, a learner joins by
   const teacher = { name: 'Dr Teacher', email: `teacher-${stamp}@example.test` }
   const learner = { name: 'Cohort Learner', email: `student-${stamp}@example.test` }
   await signUp(page, teacher.name, teacher.email, PASSWORD)
+  await confirmEmail(page, teacher.email)
 
   // The site admin creates the organisation and makes the teacher an instructor.
   await signIn(page, E2E_ADMIN.email, E2E_ADMIN.password)

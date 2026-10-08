@@ -369,6 +369,8 @@ export interface LtiPlatformsTable {
   jwks_url: string
   deployment_ids: Json
   active: Bool
+  /** Course placements on this LMS open restricted packs for their learners (admin's choice). */
+  grants_access: ColumnType<number | boolean, boolean | undefined, boolean>
   created_at: Timestamp
 }
 

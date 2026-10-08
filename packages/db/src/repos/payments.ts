@@ -46,13 +46,20 @@ export interface PaymentEvent {
   providerRef?: string
   /** The provider's payment id (refunds refer to it). */
   providerPaymentRef?: string
+  /** OUR payment id, echoed back by the provider (client_reference_id / reference_id). */
+  paymentId?: string
   amountMinor?: number
   currency?: string
 }
 
 export type EventOutcome = 'applied' | 'duplicate' | 'unknown_payment' | 'rejected' | 'ignored'
 
-const CURRENCY = /^[A-Z]{3}$/
+/**
+ * Currencies with two decimal places (prices are entered as e.g. 499.00).
+ * Zero- and three-decimal currencies (JPY, KWD…) would be charged at the
+ * wrong scale, so they are not offered.
+ */
+export const SUPPORTED_CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'NZD', 'SGD', 'HKD', 'AED', 'SAR', 'QAR', 'CHF', 'SEK', 'NOK', 'DKK', 'ZAR', 'MYR', 'PHP', 'THB', 'LKR', 'NPR', 'BDT', 'PKR', 'EGP', 'NGN', 'KES', 'BRL', 'MXN'] as const
 const MAX_PRICE_MINOR = 100_000_000
 
 const productQuery = (db: Db, siteId: string) =>
@@ -68,7 +75,7 @@ const toProduct = (r: Omit<Product, 'active'> & { active: number | boolean }): P
 export async function saveProduct(db: Db, scope: Scope, input: { packId: string; priceMinor: number; currency: string; active: boolean }): Promise<Product> {
   requireRole(scope, 'admin')
   const currency = input.currency.trim().toUpperCase()
-  if (!CURRENCY.test(currency)) throw new ValidationError('Use a three-letter currency code, e.g. INR or USD.')
+  if (!(SUPPORTED_CURRENCIES as readonly string[]).includes(currency)) throw new ValidationError(`Use one of: ${SUPPORTED_CURRENCIES.join(', ')}.`)
   if (!Number.isInteger(input.priceMinor) || input.priceMinor < 1 || input.priceMinor > MAX_PRICE_MINOR) {
     throw new ValidationError('Enter a price above zero.')
   }
@@ -157,9 +164,71 @@ export async function listPayments(db: Db, scope: Scope): Promise<(Payment & { e
     .execute()
 }
 
+/** A provider event about one of OUR payments that we cannot find yet: roll back so the provider retries. */
+export class PaymentNotFoundYetError extends Error {
+  constructor(readonly paymentId: string) {
+    super(`Payment ${paymentId} is not recorded yet; the provider should retry.`)
+    this.name = 'PaymentNotFoundYetError'
+  }
+}
+
+type PaymentRow = { id: string; site_id: string; user_id: string; pack_id: string; provider_ref: string | null; provider_payment_ref: string | null; amount_minor: number; currency: string; status: PaymentStatus }
+
+/** Finds the payment an event is about: by the provider's checkout id, its payment id, or (fallback) OUR payment id. */
+async function findPaymentFor(trx: Db, event: PaymentEvent): Promise<PaymentRow | undefined> {
+  const base = () =>
+    trx
+      .selectFrom('payments')
+      .select(['id', 'site_id', 'user_id', 'pack_id', 'provider_ref', 'provider_payment_ref', 'amount_minor', 'currency', 'status'])
+      .where('provider', '=', event.provider)
+  if (event.providerRef) {
+    const byRef = await base().where('provider_ref', '=', event.providerRef).forUpdate().executeTakeFirst()
+    if (byRef) return byRef
+  } else if (event.providerPaymentRef) {
+    const byCharge = await base().where('provider_payment_ref', '=', event.providerPaymentRef).forUpdate().executeTakeFirst()
+    if (byCharge) return byCharge
+  }
+  // The webhook can arrive before checkout stored the provider's id: our own id travels with the checkout.
+  if (!event.paymentId) return undefined
+  const ours = await base().where('id', '=', event.paymentId).forUpdate().executeTakeFirst()
+  if (ours && ours.provider_ref === null && event.providerRef) {
+    await trx.updateTable('payments').set({ provider_ref: event.providerRef.slice(0, 128) }).where('id', '=', ours.id).execute()
+  }
+  return ours
+}
+
+async function applyPaid(trx: Db, payment: PaymentRow, event: PaymentEvent, system: Scope, now: Date): Promise<EventOutcome> {
+  if (payment.status !== 'created') return 'ignored'
+  // A paid event must state what was paid, and it must be exactly our price.
+  const matches = event.amountMinor === payment.amount_minor && event.currency?.toUpperCase() === payment.currency
+  if (!matches) {
+    await trx.updateTable('payments').set({ status: 'failed', updated_at: now }).where('id', '=', payment.id).execute()
+    await recordAudit(trx, system, { action: 'payment.rejected', targetType: 'payment', targetId: payment.id, details: { expected: `${payment.amount_minor} ${payment.currency}`, got: `${event.amountMinor ?? '?'} ${event.currency ?? '?'}` } }, 'payments')
+    return 'rejected'
+  }
+  await trx
+    .updateTable('payments')
+    .set({ status: 'paid', provider_payment_ref: event.providerPaymentRef?.slice(0, 128) ?? payment.provider_payment_ref, updated_at: now })
+    .where('id', '=', payment.id)
+    .execute()
+  await grantFromSource(trx, payment.site_id, payment.user_id, payment.pack_id, 'payment', payment.id)
+  await recordAudit(trx, system, { action: 'payment.paid', targetType: 'payment', targetId: payment.id, details: { userId: payment.user_id, packId: payment.pack_id } }, 'payments')
+  return 'applied'
+}
+
+async function applyRefunded(trx: Db, payment: PaymentRow, system: Scope, now: Date): Promise<EventOutcome> {
+  if (payment.status !== 'paid') return 'ignored'
+  await trx.updateTable('payments').set({ status: 'refunded', updated_at: now }).where('id', '=', payment.id).execute()
+  await revokeFromSource(trx, payment.site_id, payment.pack_id, 'payment', payment.id)
+  await recordAudit(trx, system, { action: 'payment.refunded', targetType: 'payment', targetId: payment.id, details: { userId: payment.user_id, packId: payment.pack_id } }, 'payments')
+  return 'applied'
+}
+
 /**
- * Applies a VERIFIED provider event exactly once. Unknown payments, amount
- * mismatches and out-of-order events change nothing but are reported.
+ * Applies a VERIFIED provider event exactly once. An event about one of our
+ * payments that is not recorded yet throws PaymentNotFoundYetError, which
+ * rolls back (the event is NOT marked as seen) so the provider's retry
+ * succeeds. Events about payments that were never ours are acknowledged.
  */
 export async function applyPaymentEvent(db: Db, event: PaymentEvent): Promise<EventOutcome> {
   return db.transaction().execute(async (trx): Promise<EventOutcome> => {
@@ -169,42 +238,15 @@ export async function applyPaymentEvent(db: Db, event: PaymentEvent): Promise<Ev
       .ignore()
       .executeTakeFirst()
     if (Number(recorded.numInsertedOrUpdatedRows ?? 0) === 0) return 'duplicate'
-
-    let query = trx.selectFrom('payments').selectAll().where('provider', '=', event.provider)
-    if (event.providerRef) query = query.where('provider_ref', '=', event.providerRef)
-    else if (event.providerPaymentRef) query = query.where('provider_payment_ref', '=', event.providerPaymentRef)
-    else return 'unknown_payment'
-    const payment = await query.forUpdate().executeTakeFirst()
-    if (!payment) return 'unknown_payment'
+    const payment = await findPaymentFor(trx, event)
+    if (!payment) {
+      if (event.paymentId) throw new PaymentNotFoundYetError(event.paymentId)
+      return 'unknown_payment'
+    }
     const system: Scope = { siteId: payment.site_id, principal: null }
     const now = new Date()
-
-    if (event.type === 'paid') {
-      if (payment.status !== 'created') return 'ignored'
-      const mismatch =
-        (event.amountMinor !== undefined && event.amountMinor !== payment.amount_minor) ||
-        (event.currency !== undefined && event.currency.toUpperCase() !== payment.currency)
-      if (mismatch) {
-        await trx.updateTable('payments').set({ status: 'failed', updated_at: now }).where('id', '=', payment.id).execute()
-        await recordAudit(trx, system, { action: 'payment.rejected', targetType: 'payment', targetId: payment.id, details: { expected: `${payment.amount_minor} ${payment.currency}`, got: `${event.amountMinor} ${event.currency}` } }, 'payments')
-        return 'rejected'
-      }
-      await trx
-        .updateTable('payments')
-        .set({ status: 'paid', provider_payment_ref: event.providerPaymentRef?.slice(0, 128) ?? payment.provider_payment_ref, updated_at: now })
-        .where('id', '=', payment.id)
-        .execute()
-      await grantFromSource(trx, payment.site_id, payment.user_id, payment.pack_id, 'payment', payment.id)
-      await recordAudit(trx, system, { action: 'payment.paid', targetType: 'payment', targetId: payment.id, details: { userId: payment.user_id, packId: payment.pack_id } }, 'payments')
-      return 'applied'
-    }
-    if (event.type === 'refunded') {
-      if (payment.status !== 'paid') return 'ignored'
-      await trx.updateTable('payments').set({ status: 'refunded', updated_at: now }).where('id', '=', payment.id).execute()
-      await revokeFromSource(trx, payment.site_id, payment.pack_id, 'payment', payment.id)
-      await recordAudit(trx, system, { action: 'payment.refunded', targetType: 'payment', targetId: payment.id, details: { userId: payment.user_id, packId: payment.pack_id } }, 'payments')
-      return 'applied'
-    }
+    if (event.type === 'paid') return applyPaid(trx, payment, event, system, now)
+    if (event.type === 'refunded') return applyRefunded(trx, payment, system, now)
     if (payment.status !== 'created') return 'ignored'
     await trx.updateTable('payments').set({ status: 'failed', updated_at: now }).where('id', '=', payment.id).execute()
     return 'applied'

@@ -185,6 +185,23 @@ describe('cohorts', () => {
     await expect(removeCohortMember(t.db, teacher, cohortId, teacher.principal!.userId)).rejects.toMatchObject({ code: 'invalid' })
   })
 
+  it('demoting or removing an instructor ends their reach into the organisation\'s cohorts (review)', async () => {
+    const former = await createUser(t.db, s.site.id, 'learner', 'former-teacher')
+    await setOrgMember(t.db, orgAdmin, orgId, await emailOf(former), 'instructor')
+    const own = await createCohort(t.db, former, orgId, 'Their own class')
+    await addCohortInstructor(t.db, former, cohortId, await emailOf(teacher)).catch(() => undefined)
+    expect((await listMyCohorts(t.db, former)).teaching.map((c) => c.id)).toContain(own.id)
+    await setOrgMember(t.db, orgAdmin, orgId, await emailOf(former), 'member')
+    expect((await listMyCohorts(t.db, former)).teaching).toEqual([])
+    await expect(cohortProgress(t.db, former, own.id)).rejects.toMatchObject({ code: 'not_found' })
+
+    const leaver = await createUser(t.db, s.site.id, 'learner', 'leaver')
+    await setOrgMember(t.db, orgAdmin, orgId, await emailOf(leaver), 'instructor')
+    const theirs = await createCohort(t.db, leaver, orgId, 'Leaver class')
+    await removeOrgMember(t.db, orgAdmin, orgId, leaver.principal!.userId)
+    await expect(listCohortMembers(t.db, leaver, theirs.id)).rejects.toMatchObject({ code: 'not_found' })
+  })
+
   it('org admins manage every cohort of their organisation', async () => {
     expect((await listMyCohorts(t.db, orgAdmin)).teaching.map((c) => c.id)).toContain(cohortId)
     await updateCohort(t.db, orgAdmin, cohortId, { archived: true })

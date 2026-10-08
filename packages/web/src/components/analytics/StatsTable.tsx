@@ -18,7 +18,10 @@ export function StatsTable({ stats }: { stats: readonly ChallengeStats[] }) {
         <tbody>
           {stats.map((s) => (
             <tr key={s.challengeId} className="border-b border-line align-top last:border-0">
-              <th scope="row" className="px-3 py-2 text-left font-medium">{s.title}</th>
+              <th scope="row" className="px-3 py-2 text-left font-medium">
+                {s.title}
+                {s.truncated && <span className="block text-xs font-normal text-ink-muted">newest attempts only</span>}
+              </th>
               <td className="px-3 py-2">{s.learners}</td>
               <td className="px-3 py-2">{s.attempts}</td>
               <td className="px-3 py-2">{s.finished}</td>
@@ -57,7 +60,8 @@ export function CriteriaTable({ stats }: { stats: ChallengeStats }) {
               <td className="px-3 py-2">{c.missed}</td>
               <td className="px-3 py-2">
                 <span className="inline-flex items-center gap-2">
-                  <span aria-hidden className="inline-block h-2 rounded bg-danger" style={{ width: `${Math.max(2, Math.round(c.missRate * 80))}px` }} />
+                  {/* A <meter>, not an inline-styled bar: the production CSP refuses style attributes. */}
+                  <meter className="miss-meter" min={0} max={1} value={c.missRate} aria-hidden />
                   {percent(c.missRate)}
                 </span>
               </td>

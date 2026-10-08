@@ -8,6 +8,7 @@ import { newId } from '../ids'
 import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireRole, requireSignedIn, type Scope } from '../scope'
 import type { OrgRole } from '../schema'
 import { recordAudit } from './audit'
+import { normaliseEmail, type EmailLookup } from './people'
 
 export interface Organisation {
   id: string
@@ -28,6 +29,19 @@ export interface OrgMember {
 }
 
 const SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/
+
+/**
+ * Takes away cohort roles in an organisation's cohorts: instructor seats when
+ * someone stops being an instructor, every seat when they leave it.
+ */
+async function dropCohortSeats(trx: Db, orgId: string, userId: string, which: 'instructor' | 'all'): Promise<void> {
+  let query = trx
+    .deleteFrom('cohort_members')
+    .where('user_id', '=', userId)
+    .where('cohort_id', 'in', (eb) => eb.selectFrom('cohorts').select('id').where('org_id', '=', orgId))
+  if (which === 'instructor') query = query.where('role', '=', 'instructor')
+  await query.execute()
+}
 const RANK: Record<OrgRole, number> = { member: 1, instructor: 2, org_admin: 3 }
 
 /** The caller's role in an organisation, or null. Site admins are org admins of every organisation. */
@@ -126,7 +140,7 @@ export async function listOrgMembers(db: Db, scope: Scope, orgId: string): Promi
  * Gives someone a role in the organisation, by email. Only an org admin may
  * do this, and only a site admin may create or remove other org admins.
  */
-export async function setOrgMember(db: Db, scope: Scope, orgId: string, email: string, role: OrgRole): Promise<OrgMember> {
+export async function setOrgMember(db: Db, scope: Scope, orgId: string, email: string, role: OrgRole, lookup: EmailLookup = {}): Promise<OrgMember> {
   await requireOrgRole(db, scope, orgId, 'org_admin')
   if (role === 'org_admin' && !hasRole(scope, 'admin')) throw new ForbiddenError('Only a site admin can name organisation admins.')
   const person = await db
@@ -134,7 +148,8 @@ export async function setOrgMember(db: Db, scope: Scope, orgId: string, email: s
     .innerJoin('memberships', 'memberships.user_id', 'user.id')
     .select(['user.id as userId', 'user.name as name', 'user.email as email'])
     .where('memberships.site_id', '=', scope.siteId)
-    .where('user.email', '=', email.trim().toLowerCase())
+    .where('user.email', '=', normaliseEmail(email))
+    .$if(lookup.verifiedOnly === true, (q) => q.where('user.emailVerified', '=', true))
     .executeTakeFirst()
   if (!person) throw new ValidationError('Nobody on this site has that email. Ask them to create an account first.')
   await db.transaction().execute(async (trx) => {
@@ -146,6 +161,8 @@ export async function setOrgMember(db: Db, scope: Scope, orgId: string, email: s
       .values({ org_id: orgId, user_id: person.userId, site_id: scope.siteId, role, created_at: new Date() })
       .onDuplicateKeyUpdate({ role })
       .execute()
+    // Demoted to member: they no longer run any of this organisation's cohorts.
+    if (role === 'member') await dropCohortSeats(trx, orgId, person.userId, 'instructor')
     await recordAudit(trx, scope, { action: 'org.member_set', targetType: 'org', targetId: orgId, details: { userId: person.userId, from: current?.role ?? null, to: role } })
   })
   return { ...person, role }
@@ -158,6 +175,7 @@ export async function removeOrgMember(db: Db, scope: Scope, orgId: string, userI
     if (!current) return
     if (current.role === 'org_admin' && !hasRole(scope, 'admin')) throw new ForbiddenError('Only a site admin can remove an organisation admin.')
     await trx.deleteFrom('org_members').where('org_id', '=', orgId).where('user_id', '=', userId).execute()
+    await dropCohortSeats(trx, orgId, userId, 'all')
     await recordAudit(trx, scope, { action: 'org.member_removed', targetType: 'org', targetId: orgId, details: { userId, role: current.role } })
   })
 }

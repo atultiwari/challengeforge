@@ -10,6 +10,9 @@ export function mailer(): Mailer {
   return instance
 }
 
+/** Email-keyed grants count only confirmed addresses when this site can confirm them (review: email squatting). */
+export const emailLookup = (): { verifiedOnly: boolean } => ({ verifiedOnly: mailer().enabled })
+
 /**
  * Sends without making the caller wait. Auth emails must not reveal, by how
  * long a request takes, whether an account exists; failures are logged.

@@ -1,4 +1,4 @@
-import { applyPaymentEvent } from '@challengeforge/db'
+import { applyPaymentEvent, PaymentNotFoundYetError } from '@challengeforge/db'
 import { WebhookSignatureError } from '@challengeforge/services'
 import { db } from '@/server/db'
 import { fail, ok } from '@/server/http'
@@ -28,7 +28,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ provider: 
   }
   // Acknowledge events we do not act on, so the provider stops retrying them.
   if (!event) return ok({ outcome: 'ignored' })
-  const outcome = await applyPaymentEvent(db(), event)
+  let outcome
+  try {
+    outcome = await applyPaymentEvent(db(), event)
+  } catch (err) {
+    // Our payment, not recorded yet (the webhook beat checkout): ask the provider to retry later.
+    if (err instanceof PaymentNotFoundYetError) return fail(503, 'retry_later', 'Not ready; retry.')
+    throw err
+  }
   if (outcome === 'unknown_payment' || outcome === 'rejected') console.error(`[payments] ${name} event ${event.eventId}: ${outcome}`)
   return ok({ outcome })
 }

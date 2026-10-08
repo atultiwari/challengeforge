@@ -11,15 +11,11 @@
  * attempt-actions.ts (park under a token, call, apply if still parked).
  */
 import {
-  DEFAULT_BASE_POINTS,
-  assess,
-  pointsFor,
   startAttempt,
   type ActError,
   type AnyChallengeType,
   type Assessment,
   type Attempt,
-  type AttemptEvent,
   type ServiceRequest,
   type Services,
   type TypeRegistry,
@@ -33,8 +29,7 @@ import { getForAuthoring, getPlayable, loadVersionDefinition } from './content'
 import { withDeadlockRetry } from '../tx'
 import { canReviewAsInstructor } from './cohort-progress'
 import { LOCKED_MESSAGE, canPlay } from './access'
-import { issueCertificateIfEarned } from './certificates'
-import { queueLtiScores } from './lti-scores'
+import { recordAssessment } from './results'
 
 /** Performs a service a type asked for (e.g. a model reply); the server adds secrets such as API keys. */
 export type ServiceRunner = (
@@ -328,74 +323,6 @@ export async function getAttempt(db: Db, scope: Scope, deps: AttemptDeps, attemp
   // Someone else's attempt is "not found", so ids cannot be probed.
   if (!row || !allowed) throw new NotFoundError('Attempt not found.')
   return snapshotOf(db, deps, row)
-}
-
-/** @internal */
-export async function recordAssessment(
-  trx: Db,
-  scope: Scope,
-  deps: AttemptDeps,
-  type: AnyChallengeType,
-  def: unknown,
-  row: AttemptRow,
-  attempt: Attempt<unknown>,
-  now: Date,
-): Promise<void> {
-  const eventRows = await trx.selectFrom('attempt_events').selectAll().where('attempt_id', '=', row.id).orderBy('seq').execute()
-  const events: AttemptEvent[] = eventRows.map((e) => ({
-    seq: e.seq,
-    action: fromJson(e.action),
-    at: e.at.toISOString(),
-    ...(e.effects === null ? {} : { effects: fromJson(e.effects) }),
-  }))
-  const assessment = await assess(type, def, attempt, events, deps.services ?? {})
-  const points = pointsFor(
-    assessment,
-    type.pointsInput?.(def, attempt.state) ?? { basePoints: DEFAULT_BASE_POINTS, hintCosts: [], hintIndicesUsed: [] },
-  )
-  await trx
-    .insertInto('assessments')
-    .values({
-      attempt_id: row.id,
-      criteria: toJson(assessment.criteria),
-      score: assessment.score,
-      max: assessment.max,
-      passed: assessment.passed,
-      critical_failure: assessment.criticalFailure,
-      status: assessment.status,
-      points,
-      reviewer_id: null,
-      created_at: now,
-      updated_at: now,
-    })
-    .execute()
-  if (toBool(row.is_preview)) return
-
-  const fraction = assessment.max > 0 ? assessment.score / assessment.max : 0
-  await trx
-    .insertInto('progress')
-    .values({
-      site_id: scope.siteId,
-      user_id: row.user_id,
-      challenge_id: row.challenge_id,
-      attempts: 1,
-      best_points: points,
-      best_score_fraction: fraction,
-      passed_at: assessment.passed ? now : null,
-      updated_at: now,
-    })
-    .onDuplicateKeyUpdate((eb) => ({
-      attempts: eb('attempts', '+', 1),
-      best_points: eb.fn('GREATEST', [eb.ref('best_points'), eb.val(points)]),
-      best_score_fraction: eb.fn('GREATEST', [eb.ref('best_score_fraction'), eb.val(fraction)]),
-      passed_at: assessment.passed ? eb.fn.coalesce('passed_at', eb.val(now)) : eb.ref('passed_at'),
-      updated_at: now,
-    }))
-    .execute()
-  // A final pass may complete a pack that awards a certificate (never one still waiting for review).
-  if (assessment.passed && assessment.status !== 'pending_review') await issueCertificateIfEarned(trx, scope.siteId, row.user_id, row.challenge_id, now)
-  // A final result goes back to any LMS grade column the learner launched this challenge from.
-  if (assessment.status !== 'pending_review') await queueLtiScores(trx, scope.siteId, row.user_id, row.challenge_id, now)
 }
 
 export interface ProgressRow {

@@ -5,14 +5,14 @@
  * cohorts' learners on the challenges assigned to them. The learner's progress is recomputed
  * from all their results, so an overturned pass really is undone.
  */
+import { sql } from 'kysely'
 import type { Db } from '../client'
 import { toBool } from '../json'
 import { ForbiddenError, NotFoundError, hasRole, requireSignedIn, type Scope } from '../scope'
 import { getAttempt, type AttemptDeps, type AttemptSnapshot } from './attempts'
 import { recordAudit } from './audit'
-import { issueCertificateIfEarned } from './certificates'
-import { queueLtiScores } from './lti-scores'
-import { canReviewAsInstructor, reviewablePairs } from './cohort-progress'
+import { afterFinalResult, recomputeProgress } from './results'
+import { canReviewAsInstructor, instructorCanReviewSql } from './cohort-progress'
 import { isTeacher } from './orgs'
 
 export interface ReviewItem {
@@ -29,11 +29,9 @@ export interface ReviewItem {
 }
 
 export async function listReviewQueue(db: Db, scope: Scope): Promise<ReviewItem[]> {
-  requireSignedIn(scope)
+  const me = requireSignedIn(scope)
   const editor = hasRole(scope, 'editor')
   if (!editor && !(await isTeacher(db, scope))) throw new ForbiddenError()
-  const scoped = editor ? null : await reviewablePairs(db, scope)
-  if (scoped && scoped.pairs.size === 0) return []
   let query = db
     .selectFrom('assessments')
     .innerJoin('attempts', 'attempts.id', 'assessments.attempt_id')
@@ -53,39 +51,10 @@ export async function listReviewQueue(db: Db, scope: Scope): Promise<ReviewItem[
     ])
     .where('attempts.site_id', '=', scope.siteId)
     .where('assessments.status', '=', 'pending_review')
-  if (scoped) query = query.where('attempts.user_id', 'in', [...scoped.learners]).where('attempts.challenge_id', 'in', [...scoped.challenges])
-  const rows = await query.select('attempts.user_id as learnerId').orderBy('assessments.created_at').limit(500).execute()
-  return rows
-    // Learner and challenge must come from the SAME cohort, not merely from two cohorts the caller teaches.
-    .filter((r) => !scoped || scoped.pairs.has(`${r.learnerId}:${r.challengeId}`))
-    .slice(0, 200)
-    .map(({ learnerId: _l, ...r }) => ({ ...r, passed: toBool(r.passed) }))
-}
-
-/** Recomputes a learner's progress on a challenge from every (non-preview) result they have. */
-async function recomputeProgress(db: Db, siteId: string, userId: string, challengeId: string): Promise<void> {
-  const results = await db
-    .selectFrom('assessments')
-    .innerJoin('attempts', 'attempts.id', 'assessments.attempt_id')
-    .select(['assessments.passed as passed', 'assessments.points as points', 'assessments.score as score', 'assessments.max as max', 'assessments.created_at as at'])
-    .where('attempts.site_id', '=', siteId)
-    .where('attempts.user_id', '=', userId)
-    .where('attempts.challenge_id', '=', challengeId)
-    .where('attempts.is_preview', '=', false)
-    .execute()
-  const passedTimes = results.filter((r) => toBool(r.passed)).map((r) => r.at.getTime())
-  await db
-    .updateTable('progress')
-    .set({
-      best_points: Math.max(0, ...results.map((r) => r.points)),
-      best_score_fraction: Math.max(0, ...results.map((r) => (r.max > 0 ? r.score / r.max : 0))),
-      passed_at: passedTimes.length > 0 ? new Date(Math.min(...passedTimes)) : null,
-      updated_at: new Date(),
-    })
-    .where('site_id', '=', siteId)
-    .where('user_id', '=', userId)
-    .where('challenge_id', '=', challengeId)
-    .execute()
+  // Instructors: only their cohorts' learners on those cohorts' assignments, decided in SQL (never truncated in memory).
+  if (!editor) query = query.where(instructorCanReviewSql(scope.siteId, me.userId, sql.ref('attempts.user_id'), sql.ref('attempts.challenge_id')), '=', 1)
+  const rows = await query.orderBy('assessments.created_at').limit(200).execute()
+  return rows.map((r) => ({ ...r, passed: toBool(r.passed) }))
 }
 
 export interface Override {
@@ -111,14 +80,17 @@ export async function overrideAssessment(db: Db, scope: Scope, attemptId: string
   }
   const points = Math.max(0, Math.round(override.points))
   await db.transaction().execute(async (trx) => {
-    await trx
+    const now = new Date()
+    const decided = await trx
       .updateTable('assessments')
-      .set({ passed: override.passed, points: override.passed ? points : 0, status: 'overridden', reviewer_id: reviewer.userId, updated_at: new Date() })
+      .set({ passed: override.passed, points: override.passed ? points : 0, status: 'overridden', reviewer_id: reviewer.userId, updated_at: now })
       .where('attempt_id', '=', attemptId)
-      .execute()
+      // Two reviewers at once: only the first decision stands; the second finds nothing waiting.
+      .where('status', '=', 'pending_review')
+      .executeTakeFirst()
+    if (Number(decided.numUpdatedRows) !== 1) throw new NotFoundError('No result is waiting for review here.')
     await recomputeProgress(trx, scope.siteId, attempt.userId, attempt.challengeId)
-    if (override.passed) await issueCertificateIfEarned(trx, scope.siteId, attempt.userId, attempt.challengeId)
-    await queueLtiScores(trx, scope.siteId, attempt.userId, attempt.challengeId)
+    await afterFinalResult(trx, scope.siteId, attempt.userId, attempt.challengeId, override.passed, now)
     await recordAudit(trx, scope, { action: 'assessment.overridden', targetType: 'attempt', targetId: attemptId, details: { passed: override.passed, points: override.passed ? points : 0 } })
   })
 }

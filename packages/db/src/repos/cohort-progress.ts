@@ -4,9 +4,10 @@
  * results an instructor may review: those of THEIR cohort's learners, on
  * challenges assigned to that cohort.
  */
+import { sql, type RawBuilder } from 'kysely'
 import type { Db } from '../client'
 import { NotFoundError, requireSignedIn, type Scope } from '../scope'
-import { assignmentsOf, cohortAccess, listMyCohorts, requireCohortManager } from './cohorts'
+import { assignmentsOf, cohortAccess, requireCohortManager } from './cohorts'
 
 export interface GridColumn {
   challengeId: string
@@ -119,26 +120,33 @@ export async function myCohortAssignments(db: Db, scope: Scope, cohortId: string
   return columns.map((c) => ({ ...c, ...cellOf(progress.get(`${p.userId}:${c.challengeId}`), c.dueAt, now) }))
 }
 
-/** (learner, challenge) pairs the caller may review as an instructor, as "userId:challengeId" keys. */
-export async function reviewablePairs(db: Db, scope: Scope): Promise<{ learners: Set<string>; challenges: Set<string>; pairs: Set<string> }> {
-  const empty = { learners: new Set<string>(), challenges: new Set<string>(), pairs: new Set<string>() }
-  if (!scope.principal) return empty
-  const { teaching } = await listMyCohorts(db, scope)
-  for (const cohort of teaching.filter((c) => !c.archived)) {
-    const challengeIds = (await assignedChallenges(db, cohort.id)).map((c) => c.challengeId)
-    const learners = await db.selectFrom('cohort_members').select('user_id').where('cohort_id', '=', cohort.id).where('role', '=', 'learner').execute()
-    for (const l of learners) {
-      empty.learners.add(l.user_id)
-      for (const c of challengeIds) {
-        empty.challenges.add(c)
-        empty.pairs.add(`${l.user_id}:${c}`)
-      }
-    }
-  }
-  return empty
+/**
+ * SQL: true when `me` manages a live cohort that has `learner` as a learner
+ * and `challenge` assigned (directly, or through its pack). "Manages" means an
+ * org admin of the cohort's organisation, or the cohort's instructor while
+ * still an instructor of the organisation. One query, so the review queue
+ * and every review check stay fast however many cohorts someone teaches.
+ */
+export function instructorCanReviewSql(siteId: string, me: string, learner: unknown, challenge: unknown): RawBuilder<number> {
+  return sql<number>`EXISTS (
+    SELECT 1 FROM cohorts c
+    JOIN cohort_members lm ON lm.cohort_id = c.id AND lm.role = 'learner' AND lm.user_id = ${learner}
+    JOIN cohort_assignments a ON a.cohort_id = c.id
+    WHERE c.site_id = ${siteId} AND c.archived = FALSE
+      AND (a.challenge_id = ${challenge} OR a.pack_id = (SELECT ch.pack_id FROM challenges ch WHERE ch.id = ${challenge}))
+      AND (
+        EXISTS (SELECT 1 FROM org_members oa WHERE oa.org_id = c.org_id AND oa.user_id = ${me} AND oa.role = 'org_admin')
+        OR (
+          EXISTS (SELECT 1 FROM cohort_members im WHERE im.cohort_id = c.id AND im.user_id = ${me} AND im.role = 'instructor')
+          AND EXISTS (SELECT 1 FROM org_members oi WHERE oi.org_id = c.org_id AND oi.user_id = ${me} AND oi.role = 'instructor')
+        )
+      )
+  )`
 }
 
 /** True when the caller teaches a cohort with this learner in it and this challenge assigned. */
 export async function canReviewAsInstructor(db: Db, scope: Scope, learnerId: string, challengeId: string): Promise<boolean> {
-  return (await reviewablePairs(db, scope)).pairs.has(`${learnerId}:${challengeId}`)
+  if (!scope.principal) return false
+  const row = await db.selectNoFrom(instructorCanReviewSql(scope.siteId, scope.principal.userId, learnerId, challengeId).as('ok')).executeTakeFirst()
+  return Number(row?.ok ?? 0) === 1
 }

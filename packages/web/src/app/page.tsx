@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { listMyCertificates, listMyCohorts, listMyProgress, listPlayable, lockedChallengeIds, type ChallengeSummary, type Cohort, type ProgressRow } from '@challengeforge/db'
 import { db } from '@/server/db'
+import { mailer } from '@/server/mail'
+import { ConfirmEmailNotice } from '@/components/auth/ConfirmEmailNotice'
 import { currentScope } from '@/server/scope'
 
 function groupBySection(challenges: readonly ChallengeSummary[]): [string, ChallengeSummary[]][] {
@@ -34,6 +36,7 @@ export default async function CatalogPage() {
           </p>
         )}
       </header>
+      {user && !user.emailVerified && mailer().enabled && !user.email.endsWith('@lti.invalid') && <ConfirmEmailNotice email={user.email} />}
       {user && (
         <section className="space-y-2" aria-labelledby="my-cohorts">
           <h2 id="my-cohorts" className="text-2xl">Your cohorts</h2>

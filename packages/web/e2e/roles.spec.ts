@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { E2E_ADMIN } from './config'
-import { signIn, signUp } from './helpers'
+import { confirmEmail, signIn, signUp } from './helpers'
 
 const PASSWORD = 'e2e-password-12345'
 
@@ -10,6 +10,8 @@ test('an admin makes two authors; one creates a case and adds the other as co-au
   const coauthor = { name: 'Co Author', email: `co-${stamp}@example.test` }
   await signUp(page, lead.name, lead.email, PASSWORD)
   await signUp(page, coauthor.name, coauthor.email, PASSWORD)
+  // Roles given by email need a confirmed address when the site sends mail (review: email squatting).
+  await confirmEmail(page, coauthor.email)
 
   await signIn(page, E2E_ADMIN.email, E2E_ADMIN.password)
   await page.goto('/admin')

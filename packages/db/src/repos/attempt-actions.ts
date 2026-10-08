@@ -26,7 +26,6 @@ import {
   JOB_TIMEOUT_MS,
   PENDING_TIMEOUT_MS,
   definitionFor,
-  recordAssessment,
   servicesFor,
   snapshotOf,
   toAttempt,
@@ -36,6 +35,7 @@ import {
   type AttemptRow,
   type AttemptSnapshot,
 } from './attempts'
+import { recordAssessment } from './results'
 
 interface Locked {
   row: AttemptRow & { pending_key: string | null; pending_since: Date | null }
