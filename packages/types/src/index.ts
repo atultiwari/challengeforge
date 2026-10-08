@@ -11,3 +11,4 @@ export const registry = createTypeRegistry(builtInTypes)
 export * from './lab-legacy'
 export * from './diagnostic-sim'
 export * from './question-set'
+export * from './question-set-draft'

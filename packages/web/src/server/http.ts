@@ -32,6 +32,7 @@ export function toResponse(err: unknown): Response {
   if (err instanceof ValidationError) return fail(422, 'invalid', err.message, err.issues)
   if (err instanceof ForbiddenError) return fail(403, 'forbidden', err.message)
   if (err instanceof NotFoundError) return fail(404, 'not_found', err.message)
+  if ((err as { errno?: number }).errno === 1062) return fail(409, 'duplicate', 'Something with that name already exists.')
   console.error('[api] unexpected error', err)
   return fail(500, 'server_error', 'Something went wrong. Please try again.')
 }
