@@ -29,6 +29,7 @@ import type { Db } from '../client'
 import { newId, newSeed } from '../ids'
 import { fromJson, toBool, toJson } from '../json'
 import { NotFoundError, hasRole, requireSignedIn, type Scope } from '../scope'
+import { datasetLoaderFor } from './assets'
 import { getForAuthoring, getPlayable, loadVersionDefinition } from './content'
 import { withDeadlockRetry } from '../tx'
 
@@ -254,6 +255,11 @@ export async function startOrResume(
   )
 }
 
+/** Services for one challenge's attempt: injected ones, plus its own datasets. */
+function servicesFor(db: Db, deps: AttemptDeps, challengeId: string): Services {
+  return { loadDataset: datasetLoaderFor(db, challengeId), ...(deps.services ?? {}) }
+}
+
 /** Reads an attempt: its owner, or an admin reviewing it. */
 export async function getAttempt(db: Db, scope: Scope, deps: AttemptDeps, attemptId: string): Promise<AttemptSnapshot> {
   const p = requireSignedIn(scope)
@@ -296,8 +302,9 @@ export async function performAction(
       const type = typeFor(deps.registry, row.type_id, row.type_version)
       const def = await definitionFor(trx, row.challenge_version_id)
       const now = (deps.now ?? (() => new Date()))()
+      const services = servicesFor(trx, deps, row.challenge_id)
       const result = await act(type, def, toAttempt(row), rawAction, {
-        services: deps.services ?? {},
+        services,
         at: now.toISOString(),
         ...(deps.onError ? { onError: deps.onError } : {}),
       })
@@ -322,7 +329,7 @@ export async function performAction(
         .execute()
 
       const updated: AttemptRow = { ...row, seq: next.seq, status: next.status, state: next.state }
-      if (next.status === 'terminal') await recordAssessment(trx, scope, deps, type, def, updated, next, now)
+      if (next.status === 'terminal') await recordAssessment(trx, scope, { ...deps, services }, type, def, updated, next, now)
       return { ok: true as const, duplicate: false, snapshot: await snapshotOf(trx, deps, updated) }
     }),
   )

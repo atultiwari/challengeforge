@@ -7,7 +7,8 @@ export interface InteractionProps {
   challengeId: string
   config: Readonly<Record<string, unknown>>
   /** Submits the learner's answer for server-side grading. */
-  onSubmit: (payload: Record<string, unknown>) => Promise<void>
+  /** The server validates the payload against the type's action schema. */
+  onSubmit: (payload: unknown) => Promise<void>
   submitting: boolean
   disabled: boolean
 }

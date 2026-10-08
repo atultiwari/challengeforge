@@ -7,14 +7,20 @@ import { ClickToFlag } from '@/components/interactions/click-to-flag/ClickToFlag
 import { DataFlagger } from '@/components/interactions/data-flagger/DataFlagger'
 import { MetricsDashboard } from '@/components/interactions/MetricsDashboard'
 import { ScenarioQuiz } from '@/components/interactions/scenario-quiz/ScenarioQuiz'
+import { EvidenceQuiz } from '@/components/interactions/evidence-quiz/EvidenceQuiz'
+import { SubgroupExplorer } from '@/components/interactions/subgroup-explorer/SubgroupExplorer'
+import { ThresholdSlider } from '@/components/interactions/threshold-slider/ThresholdSlider'
 import type { SendAction } from './Player'
 
-/** The Lab's Level 1 interaction components, by the name a challenge declares. */
+/** The Lab's interaction components, by the name a challenge declares. */
 const INTERACTIONS: Readonly<Record<string, ComponentType<InteractionProps>>> = {
   click_to_flag: ClickToFlag,
   data_flagger: DataFlagger,
+  evidence_quiz: EvidenceQuiz,
   metrics_dashboard: MetricsDashboard,
   scenario_quiz: ScenarioQuiz,
+  subgroup_explorer: SubgroupExplorer,
+  threshold_slider: ThresholdSlider,
 }
 
 const STATUS_TEXT: Record<LabLegacyView['status'], string> = {

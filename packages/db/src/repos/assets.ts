@@ -6,6 +6,7 @@
 import { createHash } from 'node:crypto'
 import type { Db } from '../client'
 import { newId } from '../ids'
+import type { DatasetLoader, DatasetRow } from '@challengeforge/engine'
 import { NotFoundError, hasRole, requireRole, requireSignedIn, type Scope } from '../scope'
 
 /** MEDIUMBLOB limit, less headroom. */
@@ -109,4 +110,21 @@ export async function getAssetForPlay(db: Db, scope: Scope, challengeId: string,
   const playable = row.publishedVersionId !== null && row.status !== 'archived' && row.visibility === 'public'
   if (!editor && !playable) throw new NotFoundError('Asset not found.')
   return { contentType: row.contentType, bytes: row.bytes, sha256: row.sha256 }
+}
+
+/**
+ * Dataset rows for the engine's metric rules (e.g. metric_target), read from
+ * the challenge's OWN assets, so a definition can never reach another
+ * challenge's data. Accepts the Lab's `{ patients: [...] }`, `{ rows: [...] }`
+ * or a bare array. Throws on anything else; the rule then fails closed.
+ */
+export function datasetLoaderFor(db: Db, challengeId: string): DatasetLoader {
+  return async (ref) => {
+    const row = await db.selectFrom('assets').select('bytes').where('challenge_id', '=', challengeId).where('path', '=', ref).executeTakeFirst()
+    if (!row) throw new Error(`Dataset ${ref} is not an asset of this challenge.`)
+    const parsed = JSON.parse(row.bytes.toString('utf8')) as unknown
+    const rows = Array.isArray(parsed) ? parsed : ((parsed as { patients?: unknown; rows?: unknown }).patients ?? (parsed as { rows?: unknown }).rows)
+    if (!Array.isArray(rows) || rows.length === 0) throw new Error(`Dataset ${ref} has no rows.`)
+    return rows as DatasetRow[]
+  }
 }
