@@ -1,11 +1,12 @@
 import 'server-only'
 import type { AttemptDeps } from '@challengeforge/db'
 import { registry } from '@challengeforge/types'
-import { serviceRunner } from './services'
+import { serviceRunners } from './services'
 
-/** Model calls and judged grading go through the service runner (and so through the gateway). */
+/** Model calls, judged grading and background jobs go through the shared service runners (and so through the gateway). */
 export const attemptDeps: AttemptDeps = {
   registry,
-  runService: serviceRunner,
+  runService: (request, context) => serviceRunners().runService(request, context),
+  runJobSlice: (request, progress, context) => serviceRunners().runJobSlice(request, progress, context),
   onError: (cause) => console.error('[attempt] step failed', cause),
 }

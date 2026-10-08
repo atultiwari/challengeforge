@@ -38,6 +38,9 @@ importers:
       '@challengeforge/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@challengeforge/services':
+        specifier: workspace:*
+        version: link:../../packages/services
       '@challengeforge/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -86,6 +89,25 @@ importers:
         specifier: ^4.1.0
         version: 4.6.5
 
+  packages/services:
+    dependencies:
+      '@challengeforge/db':
+        specifier: workspace:*
+        version: link:../db
+      '@challengeforge/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@challengeforge/llm-gateway':
+        specifier: workspace:*
+        version: link:../llm-gateway
+      zod:
+        specifier: ^4.1.0
+        version: 4.6.5
+    devDependencies:
+      '@challengeforge/types':
+        specifier: workspace:^
+        version: link:../types
+
   packages/types:
     dependencies:
       '@challengeforge/engine':
@@ -106,6 +128,9 @@ importers:
       '@challengeforge/llm-gateway':
         specifier: workspace:*
         version: link:../llm-gateway
+      '@challengeforge/services':
+        specifier: workspace:*
+        version: link:../services
       '@challengeforge/types':
         specifier: workspace:*
         version: link:../types

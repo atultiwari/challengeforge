@@ -15,7 +15,8 @@
     "@challengeforge/engine": "workspace:*",
     "@challengeforge/types": "workspace:*",
     "better-auth": "^1.7.5",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "@challengeforge/services": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^5.0.3"

@@ -12,4 +12,6 @@ export const E2E_ENV: Record<string, string> = {
   SITE_SLUG: 'e2e',
   SITE_NAME: 'ChallengeForge E2E',
   NEXT_DIST_DIR: '.next-e2e',
+  // Many sign-ups in seconds; ignored by the app whenever NODE_ENV is production.
+  DISABLE_RATE_LIMITS_FOR_TESTS: 'true',
 }

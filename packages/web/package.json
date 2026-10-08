@@ -22,7 +22,8 @@
     "react-markdown": "^10.1.0",
     "server-only": "0.0.1",
     "zod": "^4.1.0",
-    "@challengeforge/llm-gateway": "workspace:*"
+    "@challengeforge/llm-gateway": "workspace:*",
+    "@challengeforge/services": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",

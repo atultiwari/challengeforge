@@ -2,6 +2,7 @@ import { toNextJsHandler } from 'better-auth/next-js'
 import { auth } from '@/server/auth'
 import { fail, sameOrigin } from '@/server/http'
 import { clientIp, createRateLimiter } from '@/lib/rate-limit'
+import { rateLimitsDisabledForTests } from '@/server/test-switches'
 
 const handlers = toNextJsHandler((request: Request) => auth().handler(request))
 
@@ -18,7 +19,7 @@ export const GET = handlers.GET
 export async function POST(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return fail(403, 'bad_origin', 'Request refused.')
   const { pathname } = new URL(request.url)
-  if (CREDENTIAL_PATHS.includes(pathname) && !credentialLimiter.allow(clientIp(request.headers))) {
+  if (CREDENTIAL_PATHS.includes(pathname) && !rateLimitsDisabledForTests() && !credentialLimiter.allow(clientIp(request.headers))) {
     return fail(429, 'rate_limited', 'Too many attempts. Wait a minute and try again.')
   }
   return handlers.POST(request)

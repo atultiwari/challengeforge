@@ -8,9 +8,11 @@
  *   challengeforge publish-pack <slug>     publish every challenge in an imported pack
  *   challengeforge create-admin            create (or promote) the site's administrator
  *   challengeforge reset-password          set a new password (from NEW_PASSWORD) and sign the person out
+ *   challengeforge run-jobs                advance background jobs (run from cron every few minutes)
  */
 import { Command } from 'commander'
-import { createDb, ensureSite, grantRoleUnchecked, importPack, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
+import { advanceJob, createDb, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
+import { createServiceRunners, servicesConfigFromEnv } from '@challengeforge/services'
 import { registry } from '@challengeforge/types'
 import { loadConfig } from './config'
 import { loadPackFromDirectory } from './pack-loader'
@@ -102,6 +104,26 @@ program
     withDb(async (db) => {
       await resetPassword(db, options.email, process.env['NEW_PASSWORD'])
       process.stdout.write(`Password reset for ${options.email}; existing sessions ended.\n`)
+    }),
+  )
+
+program
+  .command('run-jobs')
+  .option('--max-seconds <n>', 'stop starting new slices after this long', '240')
+  .description('Advance queued background jobs (e.g. evaluation runs) slice by slice; run from cron')
+  .action((options: { maxSeconds: string }) =>
+    withDb(async (db) => {
+      const deadline = Date.now() + Math.max(10, Number(options.maxSeconds) || 240) * 1000
+      const deps = { registry, ...createServiceRunners(db, servicesConfigFromEnv(process.env)), onError: (e: unknown) => process.stderr.write(`${String(e)}\n`) }
+      let slices = 0
+      for (let ids = await listRunnableJobIds(db, 50); ids.length > 0 && Date.now() < deadline; ids = await listRunnableJobIds(db, 50)) {
+        for (const id of ids) {
+          if (Date.now() >= deadline) break
+          await advanceJob(db, deps, id)
+          slices += 1
+        }
+      }
+      process.stdout.write(`Advanced ${slices} job slices.\n`)
     }),
   )
 

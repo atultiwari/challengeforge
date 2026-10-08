@@ -1,15 +1,18 @@
 'use client'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AttemptSnapshot } from '@challengeforge/db'
-import type { ChatMissionView, DiagnosticSimView, LabLegacyView, QuestionSetView } from '@challengeforge/types'
+import type { ChatMissionView, DiagnosticSimView, LabLegacyView, PromptHardeningView, QuestionSetView } from '@challengeforge/types'
 import { postJson } from '@/lib/api'
 import { AssessmentSummary } from './AssessmentSummary'
 import { ChatMissionPlayer } from './ChatMissionPlayer'
+import { PromptHardeningPlayer } from './PromptHardeningPlayer'
 import { DiagnosticSimPlayer } from './diagnostic/DiagnosticSimPlayer'
 import { LabLegacyPlayer } from './LabLegacyPlayer'
 import { QuestionSetPlayer } from './QuestionSetPlayer'
 
-const PLAYABLE_TYPES = new Set(['lab-legacy', 'question-set', 'diagnostic-sim', 'chat-mission'])
+const PLAYABLE_TYPES = new Set(['lab-legacy', 'question-set', 'diagnostic-sim', 'chat-mission', 'prompt-hardening'])
+/** How often the page advances a background job (each call runs one bounded slice). */
+const JOB_POLL_MS = 1500
 
 export type SendAction = (action: Record<string, unknown>) => Promise<boolean>
 
@@ -57,6 +60,26 @@ export function Player({ challengeId, title, preview, initial }: Props) {
         : Promise.resolve(false),
     [run, snapshot],
   )
+  // A background job (e.g. an evaluation run) is advanced by this page, one slice per poll.
+  const jobId = snapshot?.pendingJob?.id ?? null
+  useEffect(() => {
+    if (!jobId) return
+    let stopped = false
+    const tick = async () => {
+      const r = await postJson<{ status: string; error: string | null; snapshot: AttemptSnapshot }>(`/api/jobs/${jobId}/advance`, {})
+      if (stopped) return
+      if (!r.ok) return setError(r.error.message)
+      setSnapshot(r.data.snapshot)
+      if (r.data.status === 'failed') setError(r.data.error ?? 'The evaluation could not be completed.')
+      else if (r.data.status !== 'done') timer = setTimeout(tick, JOB_POLL_MS)
+    }
+    let timer = setTimeout(tick, JOB_POLL_MS)
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+    }
+  }, [jobId])
+
   const start = useCallback(() => run<AttemptSnapshot>(`/api/challenges/${challengeId}/attempt`, { preview }, setSnapshot), [run, challengeId, preview])
 
   const toast = error && (
@@ -101,6 +124,9 @@ export function Player({ challengeId, title, preview, initial }: Props) {
       )}
       {snapshot.typeId === 'chat-mission' && (
         <ChatMissionPlayer key={snapshot.attemptId} view={snapshot.view as ChatMissionView} send={send} busy={busy} />
+      )}
+      {snapshot.typeId === 'prompt-hardening' && (
+        <PromptHardeningPlayer key={snapshot.attemptId} view={snapshot.view as PromptHardeningView} pendingJob={snapshot.pendingJob} send={send} busy={busy} />
       )}
       {!PLAYABLE_TYPES.has(snapshot.typeId) && (
         <p className="card">This kind of challenge cannot be played in this version yet.</p>

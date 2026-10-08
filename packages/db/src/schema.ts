@@ -230,6 +230,24 @@ export interface LlmCredentialsTable {
   updated_at: Timestamp
 }
 
+export interface JobsTable {
+  id: string
+  site_id: string
+  user_id: string
+  attempt_id: string
+  kind: string
+  status: 'queued' | 'running' | 'done' | 'failed'
+  request: Json
+  action: Json
+  idempotency_key: string | null
+  progress: ColumnType<unknown, string | null, string | null>
+  error: string | null
+  failures: number
+  lease_until: NullableTimestamp
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
 export interface Database {
   sites: SitesTable
   user: UserTable
@@ -249,6 +267,7 @@ export interface Database {
   llm_call_counters: LlmCallCountersTable
   llm_usage: LlmUsageTable
   llm_credentials: LlmCredentialsTable
+  jobs: JobsTable
 }
 
 /** Generated is unused today (all ids are app-generated); kept for future auto columns. */

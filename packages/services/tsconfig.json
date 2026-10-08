@@ -13,16 +13,13 @@
   ],
   "references": [
     {
-      "path": "../../packages/db"
+      "path": "../engine"
     },
     {
-      "path": "../../packages/types"
+      "path": "../db"
     },
     {
-      "path": "../../packages/engine"
-    },
-    {
-      "path": "../../packages/services"
+      "path": "../llm-gateway"
     }
   ]
 }

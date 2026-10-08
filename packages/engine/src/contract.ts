@@ -68,6 +68,12 @@ export interface LintIssue {
 export interface ServiceRequest {
   kind: string
   payload: unknown
+  /**
+   * 'inline' (default): one short call made during the request. 'job': long
+   * work (e.g. replaying a battery of prompts) run as a resumable background
+   * job in bounded slices, so it never depends on a host's request timeout.
+   */
+  mode?: 'inline' | 'job'
 }
 
 export interface AttemptEvent<A = unknown> {

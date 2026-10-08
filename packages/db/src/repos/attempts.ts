@@ -47,6 +47,8 @@ export interface AttemptDeps {
   services?: Services
   /** Needed only by types whose actions ask for a service (chat missions, judged grading). */
   runService?: ServiceRunner
+  /** Needed only by types whose actions ask for a background job (e.g. prompt hardening). */
+  runJobSlice?: JobSliceRunner
   /** Injected for tests; defaults to the wall clock. */
   now?: () => Date
   /** Receives step failures for server-side logging. */
@@ -63,7 +65,15 @@ export interface PublicAssessment {
   points: number
 }
 
+export interface PendingJob {
+  id: string
+  status: 'queued' | 'running'
+  progress: unknown
+}
+
 export interface AttemptSnapshot {
+  /** Long work (e.g. an evaluation run) in progress for this attempt; the page polls it. */
+  pendingJob: PendingJob | null
   attemptId: string
   challengeId: string
   typeId: string
@@ -142,10 +152,23 @@ async function loadAssessment(db: Db, attemptId: string): Promise<PublicAssessme
   }
 }
 
+async function pendingJobOf(db: Db, attemptId: string): Promise<PendingJob | null> {
+  const job = await db
+    .selectFrom('jobs')
+    .select(['id', 'status', 'progress'])
+    .where('attempt_id', '=', attemptId)
+    .where('status', 'in', ['queued', 'running'])
+    .orderBy('created_at', 'desc')
+    .limit(1)
+    .executeTakeFirst()
+  return job ? { id: job.id, status: job.status as PendingJob['status'], progress: job.progress === null ? null : fromJson(job.progress) } : null
+}
+
 async function snapshotOf(db: Db, deps: AttemptDeps, row: AttemptRow): Promise<AttemptSnapshot> {
   const type = typeFor(deps.registry, row.type_id, row.type_version)
   const def = await definitionFor(db, row.challenge_version_id)
   return {
+    pendingJob: await pendingJobOf(db, row.id),
     attemptId: row.id,
     challengeId: row.challenge_id,
     typeId: row.type_id,
@@ -284,6 +307,16 @@ export async function getAttempt(db: Db, scope: Scope, deps: AttemptDeps, attemp
 
 /** How long a parked service action may block its attempt before it is treated as lost. */
 export const PENDING_TIMEOUT_MS = 2 * 60_000
+/** Background jobs get longer: they advance only when polled or run by cron. */
+export const JOB_TIMEOUT_MS = 30 * 60_000
+export const JOB_KEY_PREFIX = 'job:'
+
+/** Runs one bounded slice of a background job; returns progress to save, or the final result. */
+export type JobSliceRunner = (
+  request: ServiceRequest,
+  progress: unknown,
+  context: { siteId: string; userId: string; attemptId: string; challengeId: string },
+) => Promise<{ done: false; progress: unknown } | { done: true; result: unknown }>
 
 interface Locked {
   row: AttemptRow & { pending_key: string | null; pending_since: Date | null }
@@ -305,8 +338,11 @@ async function lockAttempt(trx: Db, scope: Scope, deps: AttemptDeps, userId: str
   return { row, type: typeFor(deps.registry, row.type_id, row.type_version), def: await definitionFor(trx, row.challenge_version_id) }
 }
 
-const isPending = (row: Locked['row'], now: Date): boolean =>
-  row.pending_since !== null && now.getTime() - row.pending_since.getTime() < PENDING_TIMEOUT_MS
+const isPending = (row: Locked['row'], now: Date): boolean => {
+  if (row.pending_since === null) return false
+  const limit = row.pending_key?.startsWith(JOB_KEY_PREFIX) ? JOB_TIMEOUT_MS : PENDING_TIMEOUT_MS
+  return now.getTime() - row.pending_since.getTime() < limit
+}
 
 /** Writes an applied action: the event, the new state and, at the end, the assessment and progress. */
 async function commitResult(
@@ -389,6 +425,36 @@ export async function performAction(
 
       const parsed = parseAction(type, rawAction)
       const request = parsed === null || row.status === 'terminal' ? null : (type.prepare?.(def, fromJson(row.state), parsed, toAttempt(row).ctx) ?? null)
+      if (request?.mode === 'job') {
+        // Long work: queue it with the parked action, in the same transaction.
+        const jobId = newId()
+        await trx
+          .insertInto('jobs')
+          .values({
+            id: jobId,
+            site_id: scope.siteId,
+            user_id: p.userId,
+            attempt_id: attemptId,
+            kind: request.kind,
+            status: 'queued',
+            request: toJson(request),
+            action: toJson(parsed),
+            idempotency_key: key ?? null,
+            progress: null,
+            error: null,
+            failures: 0,
+            lease_until: null,
+            created_at: now,
+            updated_at: now,
+          })
+          .execute()
+        await trx
+          .updateTable('attempts')
+          .set({ pending_action: toJson(parsed), pending_key: `${JOB_KEY_PREFIX}${jobId}`, pending_since: now })
+          .where('id', '=', attemptId)
+          .execute()
+        return { done: { ok: true, duplicate: false, snapshot: await snapshotOf(trx, deps, row) } }
+      }
       if (request) {
         await trx
           .updateTable('attempts')
@@ -408,7 +474,7 @@ export async function performAction(
   return runParkedService(db, scope, deps, p.userId, attemptId, phase1.park, key)
 }
 
-async function clearPending(db: Db, attemptId: string): Promise<void> {
+export async function clearPending(db: Db, attemptId: string): Promise<void> {
   await db.updateTable('attempts').set({ pending_action: null, pending_key: null, pending_since: null }).where('id', '=', attemptId).execute()
 }
 
@@ -437,15 +503,34 @@ async function runParkedService(
     return { ok: false, error: { code: 'service_failed', message: typeof message === 'string' ? message : 'The AI service could not be reached. Please try again.' } }
   }
 
+  return applyParkedResult(db, scope, deps, userId, attemptId, parked.parsed, serviceResult, key ?? 'pending', key)
+}
+
+/**
+ * Step 3, shared by inline service calls and finished background jobs: lock
+ * the attempt, check it is still parked on THIS action, apply the result.
+ */
+export async function applyParkedResult(
+  db: Db,
+  scope: Scope,
+  deps: AttemptDeps,
+  userId: string,
+  attemptId: string,
+  parsed: unknown,
+  serviceResult: unknown,
+  expectedPendingKey: string,
+  idempotencyKey: string | undefined,
+): Promise<ActionOutcome> {
+  const key = idempotencyKey
   return withDeadlockRetry(() =>
     db.transaction().execute(async (trx): Promise<ActionOutcome> => {
       const locked = await lockAttempt(trx, scope, deps, userId, attemptId)
-      if (locked.row.pending_key !== (key ?? 'pending')) {
+      if (locked.row.pending_key !== expectedPendingKey) {
         return { ok: false, error: { code: 'busy', message: 'This attempt changed while waiting. Please try again.' } }
       }
       const now = (deps.now ?? (() => new Date()))()
       const services = servicesFor(trx, deps, locked.row.challenge_id)
-      const result = await applyServiceResult(locked.type, locked.def, toAttempt(locked.row), parked.parsed, { services, at: now.toISOString(), ...(deps.onError ? { onError: deps.onError } : {}) }, serviceResult)
+      const result = await applyServiceResult(locked.type, locked.def, toAttempt(locked.row), parsed, { services, at: now.toISOString(), ...(deps.onError ? { onError: deps.onError } : {}) }, serviceResult)
       if (!result.ok) {
         await trx.updateTable('attempts').set({ pending_action: null, pending_key: null, pending_since: null }).where('id', '=', attemptId).execute()
         return { ok: false, error: result.error }

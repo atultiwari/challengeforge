@@ -3,6 +3,7 @@ import { betterAuth } from 'better-auth'
 import { nextCookies } from 'better-auth/next-js'
 import { db } from './db'
 import { env } from './env'
+import { rateLimitsDisabledForTests } from './test-switches'
 
 /**
  * Accounts (PLAN.md §6.4): Better Auth on the same database and pool.
@@ -20,7 +21,7 @@ function createAuth() {
     emailAndPassword: { enabled: true, minPasswordLength: 10, maxPasswordLength: 128 },
     session: { expiresIn: 60 * 60 * 24 * 14, updateAge: 60 * 60 * 24 },
     // In-memory limits reset when the host idles the process; they still blunt bursts.
-    rateLimit: { enabled: true, window: 60, max: 30 },
+    rateLimit: { enabled: !rateLimitsDisabledForTests(), window: 60, max: 30 },
     advanced: { useSecureCookies: config.APP_URL.startsWith('https://') },
     plugins: [nextCookies()],
   })

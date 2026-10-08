@@ -34,6 +34,7 @@ describe('one contract, both paradigms', () => {
       'diagnostic-sim@1:interactive',
       'question-set@1:static',
       'chat-mission@1:interactive',
+      'prompt-hardening@1:interactive',
     ])
   })
 

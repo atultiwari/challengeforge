@@ -6,10 +6,12 @@ import { Migrator, type Migration, type MigrationResultSet } from 'kysely/migrat
 import type { Db } from './client'
 import * as m0001 from './migrations/0001_init'
 import * as m0002 from './migrations/0002_llm'
+import * as m0003 from './migrations/0003_jobs'
 
 const MIGRATIONS: Record<string, Migration> = {
   '0001_init': m0001,
   '0002_llm': m0002,
+  '0003_jobs': m0003,
 }
 
 function migratorFor(db: Db): Migrator {

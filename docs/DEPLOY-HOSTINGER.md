@@ -100,7 +100,19 @@ Re-importing after content changes is safe. Unchanged missions are untouched.
 Changed ones become new **draft** versions, and learners keep playing the
 published version until you publish again.
 
-## 6. Upgrades
+## 6. Background jobs (AI evaluations)
+
+Long AI evaluations (e.g. the prompt-hardening missions) run as **background
+jobs**. The learner's open page advances them a slice at a time, so they finish
+even without cron. To finish jobs whose learner closed the page, add an hPanel
+**Cron job** every 5 minutes (with the same environment variables exported, as
+in section 4):
+
+```bash
+cd ~/path/to/your/node/app && node cli.mjs run-jobs --max-seconds 240
+```
+
+## 7. Upgrades
 
 1. `pnpm release` locally.
 2. Upload the new archive in hPanel.
@@ -110,7 +122,7 @@ published version until you publish again.
 Attempts in progress are pinned to the version they started on, so publishing
 changes never disturbs a learner mid-attempt.
 
-## 7. Backups
+## 8. Backups
 
 The database holds everything, including uploaded datasets and case files.
 
@@ -123,7 +135,7 @@ The database holds everything, including uploaded datasets and case files.
 
 - **Test a restore** into a scratch database once, before you need it.
 
-## 8. Operating notes
+## 9. Operating notes
 
 - **Cold starts.** Hostinger stops idle Node apps and starts them on the next
   request. The first page after a quiet period can take a few seconds.
