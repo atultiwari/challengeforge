@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "slug": "clinical-demo",
+  "title": "Demo pack (synthetic, not clinically reviewed)",
+  "description": "Synthetic challenges that show the interactive and AI paradigms. The clinical case is not for teaching until a clinician signs it off.",
+  "sections": [
+    {
+      "slug": "simulations",
+      "title": "Diagnostic simulations (demo)"
+    },
+    {
+      "slug": "ai-missions",
+      "title": "AI missions (demo)"
+    }
+  ],
+  "challenges": [
+    {
+      "slug": "demo-dka-young-adult",
+      "section": "simulations",
+      "type": "diagnostic-sim@1",
+      "definition": "challenges/dka-young-adult.json"
+    },
+    {
+      "slug": "demo-shopbot-red-team",
+      "section": "ai-missions",
+      "type": "chat-mission@1",
+      "definition": "challenges/shopbot-red-team.json"
+    },
+    {
+      "slug": "demo-shopbot-hardening",
+      "section": "ai-missions",
+      "type": "prompt-hardening@1",
+      "definition": "challenges/shopbot-hardening.json"
+    }
+  ]
+}

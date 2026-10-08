@@ -9,7 +9,7 @@ dist/
 
 # Private content packs (e.g. Clinical AI) live in their own private repos,
 # checked out here. Answer keys must never reach this public repo.
-packs/
+/packs/
 .next/
 next-env.d.ts
 .next-e2e/
