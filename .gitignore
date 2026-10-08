@@ -1,0 +1,12 @@
+node_modules/
+coverage/
+dist/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Private content packs (e.g. Clinical AI) live in their own private repos,
+# checked out here. Answer keys must never reach this public repo.
+packs/

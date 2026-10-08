@@ -1,0 +1,22 @@
+{
+  "name": "challengeforge",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:all": "pnpm typecheck && pnpm check:boundaries && pnpm test:coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@vitest/coverage-v8": "^5.0.3",
+    "typescript": "^5.9",
+    "vitest": "^5.0.3"
+  }
+}

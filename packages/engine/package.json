@@ -1,0 +1,14 @@
+{
+  "name": "@challengeforge/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure challenge lifecycle engine: type contract, attempt runner, assessment primitives, scoring. No DB, no fs.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "dependencies": {
+    "zod": "^4.1.0"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@challengeforge/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Built-in challenge types (pure).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@challengeforge/engine": "workspace:*",
+    "zod": "^4.1.0"
+  }
+}
