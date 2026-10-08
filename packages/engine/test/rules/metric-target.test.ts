@@ -65,6 +65,18 @@ describe('metric_target validator', () => {
     expect((await validateMetricTarget(rule, { threshold: 0.5 }, ctx({ loadDataset: impossible }))).passed).toBe(false)
   })
 
+  it('fails closed when any row has a missing or non-numeric score', async () => {
+    const holes = async () => [...rows, { score: null, outcome: false }]
+    expect((await validateMetricTarget(rule, { threshold: 0.55 }, ctx({ loadDataset: holes }))).passed).toBe(false)
+  })
+
+  it('finds the best specificity in one sweep on a large dataset', () => {
+    const big = Array.from({ length: 20_000 }, (_, i) => ({ score: (i % 1000) / 1000, outcome: i % 10 === 0 }))
+    const started = Date.now()
+    expect(bestSpecificityAtTarget(big, rule)).not.toBeNull()
+    expect(Date.now() - started).toBeLessThan(500)
+  })
+
   it('computes performance with "score at or above the threshold" flagged', () => {
     const sample = [{ s: 0.5, y: true }, { s: 0.4, y: true }, { s: 0.5, y: false }, { s: 0.1, y: false }]
     const r = { ...rule, score_column: 's', truth_column: 'y' }

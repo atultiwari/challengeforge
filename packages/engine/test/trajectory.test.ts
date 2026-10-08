@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coverage, avoided, before, efficiency, type TrajectoryStep } from '../src/trajectory'
+import { coverage, avoided, before, efficiency, frequency, type TrajectoryStep } from '../src/trajectory'
 
 const step = (seq: number, kind: string, target: string, time = seq * 5): TrajectoryStep => ({ seq, kind, target, time })
 
@@ -83,6 +83,20 @@ describe('before', () => {
     expect(before({ id: 'k', label: 'x', weight: 10, first: ['i_ue', 'i_ketones'], then: 'm_insulin' }, path).passed).toBe(false)
   })
 
+  it('compares by simulated time, so a RESULT that is not back yet does not count', () => {
+    // The gas is ordered at 5 but its result is ready at 15; insulin starts at 10.
+    const withResults: TrajectoryStep[] = [
+      step(1, 'order', 'i_gas', 5),
+      { seq: 1, kind: 'result', target: 'i_gas', time: 15 },
+      step(2, 'treat', 'm_insulin', 10),
+    ]
+    const spec = { id: 'k', label: 'K known before insulin', weight: 0, first: ['i_gas'], firstKinds: ['result'], then: 'm_insulin' }
+    expect(before(spec, withResults).passed).toBe(false)
+    expect(before({ ...spec, firstKinds: undefined }, withResults).passed).toBe(true)
+    const later = [...withResults.slice(0, 2), step(2, 'treat', 'm_insulin', 15)]
+    expect(before(spec, later).passed).toBe(true)
+  })
+
   it('can be critical', () => {
     expect(before({ id: 'k', label: 'x', weight: 0, first: 'm_insulin', then: 'i_potassium', critical: true }, path)).toMatchObject({
       critical: true,
@@ -106,5 +120,17 @@ describe('efficiency', () => {
   it('never goes below zero', () => {
     const many = [step(1, 'order', 'i_ct_head'), step(2, 'order', 'i_lipase')]
     expect(efficiency({ ...spec, penaltyPerExtra: 100 }, many).score).toBe(0)
+  })
+})
+
+describe('frequency', () => {
+  const repeats = [step(1, 'order', 'i_gas', 0), step(2, 'order', 'i_gas', 60), step(3, 'order', 'i_cbg', 61)]
+
+  it('passes when an item was done at least the minimum number of times', () => {
+    expect(frequency({ id: 'm', label: 'Repeat gas', weight: 5, items: ['i_gas'], minCount: 2 }, repeats)).toMatchObject({ passed: true, score: 5 })
+  })
+
+  it('gives proportional credit below the minimum', () => {
+    expect(frequency({ id: 'm', label: 'Hourly glucose', weight: 6, items: ['i_cbg'], minCount: 3 }, repeats)).toMatchObject({ passed: false, score: 2 })
   })
 })

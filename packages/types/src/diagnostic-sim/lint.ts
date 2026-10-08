@@ -27,11 +27,34 @@ function unknownRefs(def: DiagnosticSimDef): LintIssue[] {
     if (missing.length > 0) issues.push({ path, severity: 'error', message: `Unknown item: ${missing.join(', ')}.` })
   }
   def.events.forEach((e, i) => check(`events.${i}.unless_done`, e.unless_done))
+  def.investigations.forEach((inv, i) =>
+    inv.serial_results.forEach((r, j) => check(`investigations.${i}.serial_results.${j}.if_done`, r.if_done)),
+  )
+  def.rubric.monitoring.forEach((m, i) => check(`rubric.monitoring.${i}.items`, m.items))
   def.rubric.ordering.forEach((o, i) => {
     check(`rubric.ordering.${i}.first`, o.first)
     if (o.then !== undefined) check(`rubric.ordering.${i}.then`, [o.then])
   })
   return issues
+}
+
+/** Monitoring that needs repeats must point at something that CAN be repeated. */
+function monitoringRepeatable(def: DiagnosticSimDef): LintIssue[] {
+  const repeatable = new Set(def.investigations.filter((i) => i.repeatable).map((i) => i.id))
+  return def.rubric.monitoring.flatMap((m, i) =>
+    m.min_count > 1 && !m.items.some((id) => repeatable.has(id))
+      ? [{ path: `rubric.monitoring.${i}.items`, severity: 'error' as const, message: 'None of these can be repeated, so the count can never be reached.' }]
+      : [],
+  )
+}
+
+function duplicateEvents(def: DiagnosticSimDef): LintIssue[] {
+  const seen = new Set<string>()
+  return def.events.flatMap((e, i) => {
+    const dup = seen.has(e.id)
+    seen.add(e.id)
+    return dup ? [{ path: `events.${i}.id`, severity: 'error' as const, message: `The event id "${e.id}" is used more than once.` }] : []
+  })
 }
 
 function minimums(def: DiagnosticSimDef): LintIssue[] {
@@ -63,5 +86,12 @@ function rubricSanity(def: DiagnosticSimDef): LintIssue[] {
 }
 
 export function lintCase(def: DiagnosticSimDef): LintIssue[] {
-  return [...duplicateIds(def), ...unknownRefs(def), ...minimums(def), ...rubricSanity(def)]
+  return [
+    ...duplicateIds(def),
+    ...duplicateEvents(def),
+    ...unknownRefs(def),
+    ...monitoringRepeatable(def),
+    ...minimums(def),
+    ...rubricSanity(def),
+  ]
 }

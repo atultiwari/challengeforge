@@ -8,12 +8,24 @@ interface Performance {
   specificity: number
 }
 
+/** A score must be a real number; null, "" and strings never silently become 0. */
+function scoreOf(row: DatasetRow, column: string): number | null {
+  const v = row[column]
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
+/** True when every row has a usable score, so the server's recomputation can be trusted. */
+export function hasValidScores(rows: readonly DatasetRow[], rule: MetricTargetRule): boolean {
+  return rows.every((r) => scoreOf(r, rule.score_column) !== null)
+}
+
 /** A row is flagged when its score is at or above the threshold - the same rule the slider shows. */
 export function performanceAt(rows: readonly DatasetRow[], rule: MetricTargetRule, threshold: number): Performance {
   let tp = 0, fp = 0, fn = 0, tn = 0
   for (const row of rows) {
     const positive = row[rule.truth_column] === true
-    const flagged = Number(row[rule.score_column]) >= threshold
+    const score = scoreOf(row, rule.score_column)
+    const flagged = score !== null && score >= threshold
     if (positive && flagged) tp += 1
     else if (positive) fn += 1
     else if (flagged) fp += 1
@@ -22,13 +34,30 @@ export function performanceAt(rows: readonly DatasetRow[], rule: MetricTargetRul
   return { sensitivity: tp + fn === 0 ? 0 : tp / (tp + fn), specificity: tn + fp === 0 ? 0 : tn / (tn + fp) }
 }
 
-/** The best specificity any threshold achieves while meeting the target, or null if none can. */
+/**
+ * The best specificity any threshold achieves while meeting the target, or
+ * null if none can. One sort and one sweep from the highest score down, so a
+ * large dataset costs O(n log n) per submission rather than O(n^2).
+ */
 export function bestSpecificityAtTarget(rows: readonly DatasetRow[], rule: MetricTargetRule): number | null {
-  const thresholds = [...new Set(rows.map((r) => Number(r[rule.score_column])))].filter(Number.isFinite)
+  if (!hasValidScores(rows, rule)) return null
+  const scored = rows
+    .map((r) => ({ score: scoreOf(r, rule.score_column) as number, positive: r[rule.truth_column] === true }))
+    .sort((a, b) => b.score - a.score)
+  const positives = scored.filter((r) => r.positive).length
+  const negatives = scored.length - positives
+  let tp = 0
+  let fp = 0
   let best: number | null = null
-  for (const t of thresholds) {
-    const p = performanceAt(rows, rule, t)
-    if (p.sensitivity >= rule.min_sensitivity && (best === null || p.specificity > best)) best = p.specificity
+  for (let i = 0; i < scored.length; i += 1) {
+    const row = scored[i] as { score: number; positive: boolean }
+    if (row.positive) tp += 1
+    else fp += 1
+    // Only evaluate once every row sharing this score has been counted.
+    if (i + 1 < scored.length && scored[i + 1]?.score === row.score) continue
+    const sensitivity = positives === 0 ? 0 : tp / positives
+    const specificity = negatives === 0 ? 0 : (negatives - fp) / negatives
+    if (sensitivity >= rule.min_sensitivity && (best === null || specificity > best)) best = specificity
   }
   return best
 }

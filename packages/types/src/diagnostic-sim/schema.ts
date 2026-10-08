@@ -26,6 +26,16 @@ export const InvestigationSchema = z.object({
   /** Simulated minutes from ordering until the result is visible. */
   turnaround: Minutes,
   cost: z.number().nonnegative().default(0),
+  /** Can be ordered again, e.g. a repeat blood gas for monitoring. */
+  repeatable: z.boolean().default(false),
+  /**
+   * Results that depend on WHEN it was ordered and WHAT had been done by then
+   * (e.g. glucose falls only once insulin is running). The last matching
+   * entry wins; with none, `result` is shown.
+   */
+  serial_results: z
+    .array(z.object({ from_time: Minutes, if_done: z.array(Id).default([]), result: Text }))
+    .default([]),
   tag: z.enum(['essential', 'useful', 'unnecessary', 'harmful']),
   /** Shown in the debrief when the tag counts against the learner. */
   reason: z.string().optional(),
@@ -36,7 +46,8 @@ export const TreatmentSchema = z.object({
   label: Text,
   keywords: Keywords,
   response: Text,
-  tag: z.enum(['essential', 'useful', 'neutral', 'contraindicated']),
+  /** not_recommended costs efficiency marks; contraindicated is a critical failure. */
+  tag: z.enum(['essential', 'useful', 'neutral', 'not_recommended', 'contraindicated']),
   reason: z.string().optional(),
 })
 
@@ -47,6 +58,8 @@ export const TimedEventSchema = z.object({
   unless_done: z.array(Id).default([]),
   message: Text,
   vitals: z.record(z.string(), z.string()).default({}),
+  /** When set, letting this event happen costs marks (or fails the case). */
+  graded: z.object({ label: Text, weight: z.number().nonnegative().default(0), critical: z.boolean().optional() }).optional(),
 })
 
 export const OrderingRuleSchema = z.object({
@@ -54,11 +67,23 @@ export const OrderingRuleSchema = z.object({
   label: Text,
   /** Any of these counts (e.g. potassium from a gas OR a lab panel). */
   first: z.array(Id).min(1),
+  /** 'result': only a RESULT that is back counts (e.g. "potassium known"), not the order. */
+  first_kind: z.enum(['action', 'result']).optional(),
   then: Id.optional(),
   by_time: Minutes.optional(),
   required: z.boolean().optional(),
   critical: z.boolean().optional(),
   weight: z.number().nonnegative().default(0),
+})
+
+export const MonitoringRuleSchema = z.object({
+  id: Id,
+  label: Text,
+  /** Any of these counts; each one ordered or given counts once per time. */
+  items: z.array(Id).min(1),
+  min_count: z.number().int().positive(),
+  weight: z.number().nonnegative().default(0),
+  critical: z.boolean().optional(),
 })
 
 const Weight = z.number().nonnegative().default(0)
@@ -72,7 +97,6 @@ export const RubricSchema = z.object({
     diagnosis: Weight,
     differentials: Weight,
     management: Weight,
-    ordering: Weight,
   }),
   /** Minimum essential items to pass each domain. Default: all of them. */
   min_history: z.number().int().nonnegative().optional(),
@@ -80,7 +104,9 @@ export const RubricSchema = z.object({
   min_investigations: z.number().int().nonnegative().optional(),
   min_management: z.number().int().nonnegative().optional(),
   max_unnecessary: z.number().int().nonnegative().default(0),
+  /** Ordering, monitoring and graded events carry their own weights. */
   ordering: z.array(OrderingRuleSchema).default([]),
+  monitoring: z.array(MonitoringRuleSchema).default([]),
   pass_fraction: z.number().min(0).max(1).default(0.6),
   critical: z
     .discriminatedUnion('mode', [
@@ -90,7 +116,7 @@ export const RubricSchema = z.object({
     .default({ mode: 'fail' }),
 })
 
-export const DiagnosticSimDefSchema = z.object({
+const DiagnosticSimDefBase = z.object({
   title: Text,
   summary: z.string().default(''),
   review: z
@@ -98,7 +124,7 @@ export const DiagnosticSimDefSchema = z.object({
     .default({ status: 'draft' }),
   presentation: z.object({
     setting: Text,
-    patient: z.object({ age: z.number().int().nonnegative(), sex: Text }),
+    patient: z.object({ age: z.number().int().nonnegative(), sex: Text, weight_kg: z.number().positive().optional() }),
     chief_complaint: Text,
     vignette: Text,
     vitals: z.record(z.string(), z.string()).default({}),
@@ -110,7 +136,7 @@ export const DiagnosticSimDefSchema = z.object({
       minutes_per_order: Minutes.default(1),
       minutes_per_treatment: Minutes.default(2),
       time_budget: z.number().int().positive().nullable().default(null),
-      max_actions: z.number().int().positive().default(200),
+      max_actions: z.number().int().positive().max(500).default(200),
     })
     .default({
       minutes_per_question: 2,
@@ -135,10 +161,21 @@ export const DiagnosticSimDefSchema = z.object({
   debrief: Text,
   model_pathway: z.array(Text).default([]),
 })
-export type DiagnosticSimDef = z.infer<typeof DiagnosticSimDefSchema>
 
 export const CATEGORIES = ['history', 'examination', 'investigations', 'treatments'] as const
 export type Category = (typeof CATEGORIES)[number]
+
+/** Ids must be unique across ALL catalogs, so a reference can never be ambiguous. */
+export const DiagnosticSimDefSchema = DiagnosticSimDefBase.superRefine((def, ctx) => {
+  const seen = new Set<string>()
+  for (const category of CATEGORIES) {
+    def[category].forEach((item, i) => {
+      if (seen.has(item.id)) ctx.addIssue({ code: 'custom', path: [category, i, 'id'], message: `The id "${item.id}" is used more than once.` })
+      seen.add(item.id)
+    })
+  }
+})
+export type DiagnosticSimDef = z.infer<typeof DiagnosticSimDefSchema>
 
 const ItemRef = { item: Id }
 export const DiagnosticSimActionSchema = z.discriminatedUnion('kind', [

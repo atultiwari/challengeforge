@@ -9,14 +9,21 @@ export type EndReason = 'diagnosis' | 'time' | 'actions' | 'learner'
 
 export interface OrderedItem {
   id: string
+  /** Sequence number of the order action, so result steps sort correctly. */
+  seq: number
   at: number
   readyAt: number
+  /** Chosen when ordered (it may depend on what had been done); shown only once ready. */
+  result: string
 }
 
 export interface DiagnosticSimState {
   clock: number
   actionCount: number
-  /** Ids surfaced by a search; only these may be acted on (search-to-reveal). */
+  /**
+   * `${category}:${id}` keys surfaced by a search; only these may be acted on
+   * (search-to-reveal). Keyed by category so one search never unlocks another.
+   */
   discovered: readonly string[]
   asked: readonly string[]
   examined: readonly string[]
@@ -56,6 +63,8 @@ export function catalog(def: DiagnosticSimDef, category: Category): readonly { i
   return def[category]
 }
 
+export const discoveryKey = (category: Category, id: string): string => `${category}:${id}`
+
 export function doneIds(s: DiagnosticSimState): Set<string> {
   return new Set([...s.asked, ...s.examined, ...s.ordered.map((o) => o.id), ...s.treated.map((t) => t.id)])
 }
@@ -67,11 +76,24 @@ function cost(def: DiagnosticSimDef, kind: ItemKind): number {
 
 const reject = (code: string, message: string): StepOutcome<DiagnosticSimState> => ({ ok: false, error: { code, message } })
 
+/** The result an investigation shows if ordered now: the last serial entry that applies. */
+function resultFor(def: DiagnosticSimDef, s: DiagnosticSimState, item: string): string {
+  const inv = def.investigations.find((i) => i.id === item)
+  if (!inv) return ''
+  const done = doneIds(s)
+  const applicable = inv.serial_results.filter((r) => r.from_time <= s.clock && r.if_done.every((id) => done.has(id)))
+  return applicable.at(-1)?.result ?? inv.result
+}
+
+function isRepeatable(def: DiagnosticSimDef, kind: ItemKind, item: string): boolean {
+  return kind === 'order' && def.investigations.some((i) => i.id === item && i.repeatable)
+}
+
 function applyItem(def: DiagnosticSimDef, s: DiagnosticSimState, kind: ItemKind, item: string): StepOutcome<DiagnosticSimState> {
   const category = CATEGORY_OF[kind]
   const known = catalog(def, category).find((i) => i.id === item)
-  if (!known || !s.discovered.includes(item)) return reject('not_discovered', 'Search for it first.')
-  if (doneIds(s).has(item)) return reject('already_done', 'You have already done that.')
+  if (!known || !s.discovered.includes(discoveryKey(category, item))) return reject('not_discovered', 'Search for it first.')
+  if (doneIds(s).has(item) && !isRepeatable(def, kind, item)) return reject('already_done', 'You have already done that.')
   if (kind === 'order' && def.gates.differential_before_investigations && s.differential === null) {
     return reject('differential_required', 'Record a working differential before ordering investigations.')
   }
@@ -87,7 +109,8 @@ function applyItem(def: DiagnosticSimDef, s: DiagnosticSimState, kind: ItemKind,
       return { ok: true, state: { ...base, examined: [...s.examined, item] } }
     case 'order': {
       const turnaround = def.investigations.find((i) => i.id === item)?.turnaround ?? 0
-      return { ok: true, state: { ...base, ordered: [...s.ordered, { id: item, at: start, readyAt: clock + turnaround }] } }
+      const ordered: OrderedItem = { id: item, seq: s.actionCount + 1, at: start, readyAt: clock + turnaround, result: resultFor(def, s, item) }
+      return { ok: true, state: { ...base, ordered: [...s.ordered, ordered] } }
     }
     case 'treat':
       return { ok: true, state: { ...base, treated: [...s.treated, { id: item, at: start }] } }
@@ -98,7 +121,7 @@ function applyAction(def: DiagnosticSimDef, s: DiagnosticSimState, action: Diagn
   switch (action.kind) {
     case 'search': {
       const results = searchCatalog(catalog(def, action.category), action.query).map(({ id, label }) => ({ id, label }))
-      const discovered = [...new Set([...s.discovered, ...results.map((r) => r.id)])]
+      const discovered = [...new Set([...s.discovered, ...results.map((r) => discoveryKey(action.category, r.id))])]
       return { ok: true, state: { ...s, discovered, lastSearch: { category: action.category, query: action.query, results } } }
     }
     case 'ask':

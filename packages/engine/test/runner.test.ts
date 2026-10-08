@@ -127,12 +127,36 @@ describe('act', () => {
     expect(attempt.status).toBe('terminal')
   })
 
-  it('turns a throwing step into step_failed and leaves the attempt untouched', async () => {
+  it('turns a throwing step into step_failed, reports the cause privately, never in the result', async () => {
     const { attempt } = startAttempt(counterType, def, ctx)
-    const r = await act(counterType, def, attempt, { kind: 'explode' }, env())
+    const onError = vi.fn()
+    const r = await act(counterType, def, attempt, { kind: 'explode' }, { ...env(), onError })
     expect(r).toMatchObject({ ok: false, error: { code: 'step_failed' } })
-    if (r.ok) throw new Error('expected failure')
-    expect(r.error.cause).toBeInstanceOf(Error)
+    expect(JSON.stringify(r)).not.toContain('boom')
+    expect(onError).toHaveBeenCalledWith(expect.any(Error))
+  })
+
+  it('treats a throwing view as step_failed too', async () => {
+    const brokenView: typeof counterType = { ...counterType, view: () => { throw new Error('view bug') } }
+    const { attempt } = startAttempt(counterType, def, ctx)
+    const r = await act(brokenView, def, attempt, { kind: 'add', n: 1 }, env())
+    expect(r).toMatchObject({ ok: false, error: { code: 'step_failed' } })
+  })
+
+  it('rejects an invalid action time rather than letting time-based rules fail open', async () => {
+    const { attempt } = startAttempt(counterType, def, ctx)
+    for (const at of ['not-a-date', '', '2026-13-45T99:00:00Z']) {
+      expect(await act(counterType, def, attempt, { kind: 'add', n: 1 }, { services: {}, at })).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_time' },
+      })
+    }
+  })
+
+  it('rejects oversized actions before parsing them', async () => {
+    const { attempt } = startAttempt(counterType, def, ctx)
+    const huge = { kind: 'add', n: 1, padding: 'x'.repeat(70_000) }
+    expect(await act(counterType, def, attempt, huge, env())).toMatchObject({ ok: false, error: { code: 'invalid_action' } })
   })
 
   it('passes through a rejection from the type itself', async () => {

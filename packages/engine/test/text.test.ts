@@ -63,6 +63,7 @@ describe('searchCatalog', () => {
   it('needs a minimum query length so learners cannot list the whole catalog', () => {
     expect(searchCatalog(items, 'b')).toEqual([])
     expect(searchCatalog(items, '  ')).toEqual([])
+    expect(searchCatalog(items, 'b v')).toEqual([])
   })
 
   it('matches prefixes of words, not arbitrary substrings', () => {

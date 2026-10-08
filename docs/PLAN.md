@@ -411,6 +411,18 @@ engine binaries; they complicate shared-hosting deploys.
 
 - **Target:** Hostinger Node hosting + its managed database, or any Node host.
   No PHP, no Docker.
+- **Phase 0 findings from Hostinger's public docs (2026-10-08).** These still
+  need confirming on the owner's actual plan:
+
+  | Question | Finding | Status |
+  |---|---|---|
+  | Database engine | Hostinger's own support article says Web and Cloud plans use **MariaDB** (the article is old). Newer guides just say "MySQL databases". | **Confirm with `SELECT VERSION()` in phpMyAdmin.** The design already targets the MySQL ∩ MariaDB subset. |
+  | Node version | 18, 20, 22 (LTS), 24 | OK. Target Node 22. |
+  | Process model | Apps run **on demand**: the process stops after idle time and restarts on the next request, and is restarted if it crashes. | This confirms there is **no persistent worker**. In-memory caches and timers are unreliable, so the request-driven jobs + cron design (below) is required. Expect cold starts. |
+  | Deploy | Git push to deploy, or archive upload (.zip/.tar.gz); Hostinger runs install + build | Prefer **archive upload of a prebuilt standalone bundle**, because pnpm-workspace support is undocumented. |
+  | Request/proxy timeout | **Not documented** | **Owner to ask Hostinger support.** The design does not depend on it (bounded ~15 s job slices). |
+  | Cron, connection limits, memory | Not on the Node overview page | Check hPanel / support during Phase 1. |
+
 - **Confirm in Phase 0, not Phase 1** (these shape the design):
   - the database engine and version (MySQL 8 or MariaDB);
   - the Node version;

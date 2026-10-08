@@ -81,3 +81,12 @@ describe('canReveal', () => {
     expect(canReveal(scoring, null)).toBe(false)
   })
 })
+
+describe('fails closed on bad timestamps', () => {
+  it('denies a submission during a cooldown when a time is unreadable', () => {
+    const cool = { ...scoring, retry_cooldown_seconds: 30 }
+    expect(canSubmit(cool, state({ lastWrongAt: '2026-10-08T10:00:00Z' }), new Date('garbage'))).toMatchObject({ allowed: false, code: 'cooldown' })
+    expect(canSubmit(cool, state({ lastWrongAt: 'garbage' }), new Date('2026-10-08T10:00:00Z'))).toMatchObject({ allowed: false, code: 'cooldown' })
+  })
+})
+

@@ -3,13 +3,14 @@
   "summary": "Work up an unwell 19-year-old in the emergency department, reach a diagnosis and start management.",
   "review": {
     "status": "draft",
-    "notes": "SYNTHETIC teaching case written for the Phase 0 engine proof, loosely following UK JBDS adult DKA guidance. Needs clinical review (PLAN.md §10, decision 10) before any learner sees it."
+    "notes": "SYNTHETIC teaching case for the Phase 0 engine proof, loosely following UK JBDS (2023) adult DKA guidance, with ADA (2024) differences noted. Revised after an automated clinical-safety review on 2026-10-08. Thresholds must still be confirmed against the source documents by a clinician (PLAN.md §10, decision 10)."
   },
   "presentation": {
     "setting": "Emergency department, 22:40",
     "patient": {
       "age": 19,
-      "sex": "female"
+      "sex": "female",
+      "weight_kg": 60
     },
     "chief_complaint": "Vomiting and abdominal pain for two days",
     "vignette": "A 19-year-old university student is brought in by her flatmate. She has been vomiting since yesterday, has central abdominal pain and looks unwell. She is breathing quickly.",
@@ -289,7 +290,24 @@
       "result": "28.4 mmol/L",
       "turnaround": 1,
       "cost": 1,
-      "tag": "essential"
+      "tag": "essential",
+      "repeatable": true,
+      "serial_results": [
+        {
+          "from_time": 60,
+          "if_done": [
+            "m_frii"
+          ],
+          "result": "22.0 mmol/L"
+        },
+        {
+          "from_time": 120,
+          "if_done": [
+            "m_frii"
+          ],
+          "result": "17.6 mmol/L"
+        }
+      ]
     },
     {
       "id": "i_ketones",
@@ -303,7 +321,24 @@
       "result": "5.8 mmol/L (beta-hydroxybutyrate)",
       "turnaround": 2,
       "cost": 1,
-      "tag": "essential"
+      "tag": "essential",
+      "repeatable": true,
+      "serial_results": [
+        {
+          "from_time": 60,
+          "if_done": [
+            "m_frii"
+          ],
+          "result": "4.9 mmol/L (beta-hydroxybutyrate)"
+        },
+        {
+          "from_time": 120,
+          "if_done": [
+            "m_frii"
+          ],
+          "result": "3.8 mmol/L (beta-hydroxybutyrate)"
+        }
+      ]
     },
     {
       "id": "i_vbg",
@@ -321,7 +356,23 @@
       "result": "pH 7.12, HCO3 9 mmol/L, pCO2 3.1 kPa, K+ 5.4 mmol/L, lactate 1.8 mmol/L",
       "turnaround": 10,
       "cost": 2,
-      "tag": "essential"
+      "tag": "essential",
+      "repeatable": true,
+      "serial_results": [
+        {
+          "from_time": 60,
+          "if_done": [],
+          "result": "pH 7.06, HCO3 7 mmol/L, pCO2 2.9 kPa, K+ 5.7 mmol/L, lactate 2.6 mmol/L"
+        },
+        {
+          "from_time": 60,
+          "if_done": [
+            "m_fluids",
+            "m_frii"
+          ],
+          "result": "pH 7.19, HCO3 11 mmol/L, pCO2 3.3 kPa, K+ 4.4 mmol/L, lactate 1.4 mmol/L"
+        }
+      ]
     },
     {
       "id": "i_ue",
@@ -334,9 +385,10 @@
         "kidney",
         "sodium",
         "creatinine",
-        "potassium"
+        "potassium",
+        "chloride"
       ],
-      "result": "Na 131, K 5.6, urea 9.8 mmol/L, creatinine 112 µmol/L",
+      "result": "Na 131, K 5.6, Cl 98, urea 9.8 mmol/L, creatinine 112 µmol/L",
       "turnaround": 60,
       "cost": 2,
       "tag": "essential"
@@ -394,10 +446,10 @@
         "electrocardiogram",
         "heart tracing"
       ],
-      "result": "Sinus tachycardia 118/min. No arrhythmia. T waves normal.",
+      "result": "Sinus tachycardia 118/min. Tall T waves in V2–V4. No arrhythmia.",
       "turnaround": 5,
       "cost": 2,
-      "tag": "useful"
+      "tag": "essential"
     },
     {
       "id": "i_cultures",
@@ -440,8 +492,7 @@
       "result": "Clear lung fields. No consolidation.",
       "turnaround": 45,
       "cost": 4,
-      "tag": "unnecessary",
-      "reason": "No respiratory symptoms or signs; the infection source is urinary."
+      "tag": "useful"
     },
     {
       "id": "i_ct_head",
@@ -478,7 +529,7 @@
   "treatments": [
     {
       "id": "m_fluids",
-      "label": "IV 0.9% sodium chloride",
+      "label": "IV crystalloid: 0.9% sodium chloride (or a balanced crystalloid)",
       "keywords": [
         "fluids",
         "saline",
@@ -486,9 +537,15 @@
         "iv fluid",
         "fluid",
         "resuscitation",
-        "0 9"
+        "0 9",
+        "crystalloid",
+        "hartmann",
+        "hartmanns",
+        "plasma lyte",
+        "ringer",
+        "balanced"
       ],
-      "response": "1 litre of 0.9% sodium chloride started over 1 hour.",
+      "response": "1 litre of crystalloid started over 1 hour.",
       "tag": "essential"
     },
     {
@@ -501,19 +558,19 @@
         "iv insulin",
         "insulin"
       ],
-      "response": "Fixed-rate IV insulin infusion started at 0.1 units/kg/h (6 units/h).",
+      "response": "Fixed-rate IV insulin infusion started at 0.1 units/kg/h (6 units/h for 60 kg).",
       "tag": "essential"
     },
     {
       "id": "m_potassium",
-      "label": "Potassium replacement in IV fluids",
+      "label": "Potassium replacement in IV fluids (guided by a potassium result)",
       "keywords": [
         "potassium",
         "kcl",
         "replacement",
         "k"
       ],
-      "response": "Potassium to be added to the fluids, guided by serial potassium levels.",
+      "response": "40 mmol/L potassium to be added to the fluids while K is 3.5–5.5 mmol/L, none while above 5.5; recheck K at 1 hour and 2-hourly.",
       "tag": "essential"
     },
     {
@@ -590,6 +647,115 @@
       "response": "Discharge planned.",
       "tag": "contraindicated",
       "reason": "She has severe DKA and needs inpatient treatment."
+    },
+    {
+      "id": "m_senior_review",
+      "label": "Senior / critical-care review",
+      "keywords": [
+        "senior",
+        "consultant",
+        "registrar",
+        "critical care",
+        "icu",
+        "hdu",
+        "escalate",
+        "escalation",
+        "review"
+      ],
+      "response": "Senior review requested; HDU team aware.",
+      "tag": "essential"
+    },
+    {
+      "id": "m_monitoring",
+      "label": "Hourly glucose and ketones, cardiac monitoring, strict fluid balance",
+      "keywords": [
+        "monitoring",
+        "hourly",
+        "cardiac monitor",
+        "telemetry",
+        "fluid balance",
+        "catheter",
+        "obs"
+      ],
+      "response": "Hourly capillary glucose and ketones, continuous cardiac monitoring and a fluid balance chart started.",
+      "tag": "essential"
+    },
+    {
+      "id": "m_fluid_bolus",
+      "label": "500 mL crystalloid bolus over 15 minutes",
+      "keywords": [
+        "bolus",
+        "fluid challenge",
+        "500"
+      ],
+      "response": "500 mL crystalloid bolus given over 15 minutes.",
+      "tag": "useful"
+    },
+    {
+      "id": "m_glucose10",
+      "label": "Add 10% glucose infusion once glucose is below 14 mmol/L",
+      "keywords": [
+        "10% glucose",
+        "dextrose",
+        "glucose infusion",
+        "d10"
+      ],
+      "response": "10% glucose to run alongside the fluids once glucose falls below 14 mmol/L.",
+      "tag": "useful"
+    },
+    {
+      "id": "m_diabetes_team",
+      "label": "Refer to the diabetes specialist team",
+      "keywords": [
+        "diabetes team",
+        "diabetes nurse",
+        "dsn",
+        "referral",
+        "specialist"
+      ],
+      "response": "Diabetes team referral made.",
+      "tag": "useful"
+    },
+    {
+      "id": "m_insulin_bolus",
+      "label": "IV insulin bolus",
+      "keywords": [
+        "insulin bolus",
+        "stat insulin",
+        "loading dose"
+      ],
+      "response": "IV insulin bolus given.",
+      "tag": "not_recommended",
+      "reason": "JBDS advises against a bolus when a fixed-rate infusion is started (ADA allows an optional 0.1 units/kg bolus)."
+    },
+    {
+      "id": "m_hypotonic",
+      "label": "IV 5% glucose or 0.45% saline as the initial fluid",
+      "keywords": [
+        "5% glucose",
+        "5% dextrose",
+        "0 45",
+        "half normal",
+        "hypotonic"
+      ],
+      "response": "Hypotonic fluid started.",
+      "tag": "contraindicated",
+      "reason": "Hypotonic or glucose-only fluid is unsafe as initial resuscitation in DKA; it worsens hyponatraemia and raises cerebral-oedema risk."
+    },
+    {
+      "id": "m_sliding_scale",
+      "label": "Variable-rate (sliding-scale) or subcutaneous insulin only",
+      "keywords": [
+        "sliding scale",
+        "variable rate",
+        "vrii",
+        "subcutaneous insulin",
+        "sc insulin",
+        "novorapid"
+      ],
+      "response": "Sliding-scale insulin prescribed.",
+      "tag": "contraindicated",
+      "reason": "DKA needs a fixed-rate IV insulin infusion; a variable-rate or subcutaneous-only regimen does not reliably clear ketones."
     }
   ],
   "events": [
@@ -604,6 +770,11 @@
         "Heart rate": "132 /min",
         "Blood pressure": "82/48 mmHg",
         "GCS": "13"
+      },
+      "graded": {
+        "weight": 5,
+        "critical": false,
+        "label": "Prevented haemodynamic deterioration"
       }
     }
   ],
@@ -668,29 +839,61 @@
   },
   "rubric": {
     "weights": {
-      "history": 15,
+      "history": 10,
       "examination": 10,
       "investigations": 15,
       "efficiency": 5,
-      "diagnosis": 25,
+      "diagnosis": 20,
       "differentials": 5,
-      "management": 20,
-      "ordering": 5
+      "management": 20
     },
     "min_history": 4,
     "min_examination": 2,
-    "min_investigations": 4,
-    "min_management": 3,
+    "min_investigations": 5,
+    "min_management": 5,
     "max_unnecessary": 0,
     "ordering": [
       {
+        "id": "fluids_given",
+        "label": "IV fluids given",
+        "first": [
+          "m_fluids"
+        ],
+        "required": true,
+        "critical": true,
+        "weight": 0
+      },
+      {
+        "id": "insulin_given",
+        "label": "Fixed-rate IV insulin started",
+        "first": [
+          "m_frii"
+        ],
+        "required": true,
+        "critical": true,
+        "weight": 0
+      },
+      {
         "id": "k_before_insulin",
-        "label": "Potassium known before starting insulin",
+        "label": "Potassium result known before starting insulin",
         "first": [
           "i_vbg",
           "i_ue"
         ],
+        "first_kind": "result",
         "then": "m_frii",
+        "critical": true,
+        "weight": 0
+      },
+      {
+        "id": "k_before_potassium",
+        "label": "Potassium result known before replacing potassium",
+        "first": [
+          "i_vbg",
+          "i_ue"
+        ],
+        "first_kind": "result",
+        "then": "m_potassium",
         "critical": true,
         "weight": 0
       },
@@ -704,18 +907,31 @@
         "weight": 5
       }
     ],
+    "monitoring": [
+      {
+        "id": "repeat_gas",
+        "label": "Repeat venous gas to monitor response",
+        "items": [
+          "i_vbg"
+        ],
+        "min_count": 2,
+        "weight": 5
+      }
+    ],
     "pass_fraction": 0.6,
     "critical": {
       "mode": "fail"
     }
   },
-  "debrief": "This is diabetic ketoacidosis: glucose above 11 mmol/L, blood ketones of 3 mmol/L or more, and an acidosis (pH below 7.3 or bicarbonate below 15). A heart rate above 100 is one of the JBDS markers of severity, so she needs senior review and close monitoring. The trigger is a urinary infection, made worse by stopping insulin when she could not eat. The key sick-day rule is never to stop basal insulin. Priorities: start fluids first, check potassium before insulin, run a fixed-rate IV insulin infusion, replace potassium, find and treat the trigger, and continue basal insulin.",
+  "debrief": "This is diabetic ketoacidosis. JBDS (2023) criteria: glucose of 11 mmol/L or more OR known diabetes; blood ketones of 3 mmol/L or more (or urine ketones 2+); and pH below 7.3 and/or bicarbonate below 15 mmol/L. ADA (2024) uses bicarbonate below 18 and would grade this moderate (pH 7.12) to severe (HCO3 9). Her heart rate above 100 and anion gap of 24 (Na − [Cl + HCO3]) are JBDS markers of severity, and a NEWS2 of about 7 means escalation: senior or critical-care review. Her potassium is high at the start despite a total-body potassium deficit: insulin drives potassium into cells, so check it before insulin, replace it once it is 5.5 or below, and recheck at 1 hour and 2-hourly. Young adults (18–25) are at higher risk of cerebral oedema: avoid over-rapid or hypotonic fluids and act on headache or a falling GCS. The trigger is a urinary infection, made worse by stopping insulin when she could not eat. The key sick-day rule is never to stop basal insulin.",
   "model_pathway": [
-    "Recognise the pattern: known type 1 diabetes, vomiting, polyuria, deep breathing.",
-    "Bedside tests first: capillary glucose and ketones, then a venous gas for pH, bicarbonate and potassium.",
-    "Start IV 0.9% sodium chloride straight away.",
-    "Confirm potassium before starting a fixed-rate IV insulin infusion at 0.1 units/kg/h.",
-    "Look for the precipitant: urinary symptoms, dipstick and cultures; check for pregnancy.",
-    "Replace potassium in the fluids, continue basal insulin, and avoid bicarbonate and unnecessary imaging."
+    "Recognise the pattern: known type 1 diabetes, vomiting, polyuria, deep breathing; escalate early (NEWS2 about 7).",
+    "Bedside tests first: capillary glucose and ketones, then a venous gas for pH, bicarbonate and potassium; ECG for potassium effects.",
+    "Start IV crystalloid straight away.",
+    "Once a potassium result is back, start a fixed-rate IV insulin infusion at 0.1 units/kg/h (6 units/h for 60 kg); no bolus.",
+    "Replace potassium in the fluids once K is 5.5 or below; continue basal insulin.",
+    "Find the precipitant: urinary symptoms, dipstick and cultures; check for pregnancy; treat the infection.",
+    "Monitor: hourly glucose and ketones, repeat venous gas at 1 hour, fluid balance; add 10% glucose when glucose falls below 14.",
+    "Avoid bicarbonate, hypotonic fluids and unnecessary imaging."
   ]
 }

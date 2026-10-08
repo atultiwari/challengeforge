@@ -44,9 +44,9 @@ function wordsOf(item: SearchableItem): string[] {
  * the query. Prefix matching keeps "gluc" useful without letting "lucose" in.
  */
 export function searchCatalog<T extends SearchableItem>(items: readonly T[], query: string, options: SearchOptions = {}): T[] {
-  const q = normaliseTerm(query)
-  if (q.length < (options.minLength ?? DEFAULT_MIN_LENGTH)) return []
-  const queryWords = q.split(' ')
+  // One-letter words are dropped, so "a b" cannot list the whole catalog.
+  const queryWords = normaliseTerm(query).split(' ').filter((w) => w.length >= 2)
+  if (queryWords.join(' ').length < (options.minLength ?? DEFAULT_MIN_LENGTH)) return []
   return items
     .filter((item) => {
       const words = wordsOf(item)

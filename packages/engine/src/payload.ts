@@ -16,16 +16,17 @@ export function readField(payload: unknown, field: string): unknown {
 }
 
 /**
- * Parses a learner-typed number. Accepts "12", "12.5", " 12 % ", "12%".
+ * Parses a learner-typed number. Accepts "12", "-3", ".5", "12.5", " 12 % ", "12%".
  * Rejects empty strings, NaN, and non-finite values so they cannot slip past a
  * tolerance check.
  */
 export function parseLearnerNumber(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
   if (typeof value !== 'string') return null
-  const cleaned = value.replace(/%/g, '').trim()
-  if (cleaned === '') return null
-  const n = Number(cleaned)
+  // Plain decimals only: no hex, exponents or stray percent signs ("1%2%").
+  const match = /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*%?\s*$/.exec(value)
+  if (!match?.[1]) return null
+  const n = Number(match[1])
   return Number.isFinite(n) ? n : null
 }
 

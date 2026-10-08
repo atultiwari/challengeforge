@@ -44,7 +44,9 @@ export function canSubmit(
 
   if (scoring.retry_cooldown_seconds > 0 && s.lastWrongAt) {
     const readyAt = new Date(s.lastWrongAt).getTime() + scoring.retry_cooldown_seconds * 1000
-    const wait = Math.ceil((readyAt - now.getTime()) / 1000)
+    // An unreadable time must not open the cooldown: wait the full period.
+    const elapsedKnown = Number.isFinite(readyAt) && Number.isFinite(now.getTime())
+    const wait = elapsedKnown ? Math.ceil((readyAt - now.getTime()) / 1000) : scoring.retry_cooldown_seconds
     if (wait > 0) {
       return {
         allowed: false,

@@ -12,7 +12,7 @@ export const validateExact: Validator<ExactRule> = (rule, payload) => {
   const expected = rule.expected.trim()
   const passed = rule.case_sensitive
     ? submitted === expected
-    : submitted.toLocaleLowerCase() === expected.toLocaleLowerCase()
+    : submitted.toLowerCase() === expected.toLowerCase()
 
   return {
     passed,

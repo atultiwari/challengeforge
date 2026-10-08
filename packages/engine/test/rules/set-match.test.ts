@@ -146,4 +146,10 @@ describe('set_match validator', () => {
       expect((await validateSetMatch(both, { flags: [flag('R-12', 'duplicate')] }, ctx())).passed).toBe(false)
     })
   })
+
+  it('does not treat prototype names as aliases or categories', async () => {
+    const r = await validateSetMatch({ ...rule, require_category: true }, { flags: [{ id: 'constructor', category: 'x' }, 'toString'] }, ctx())
+    expect(r.passed).toBe(false)
+    expect(r.detail?.falsePositives).toBe(2)
+  })
 })

@@ -17,7 +17,7 @@ export interface DiagnosticSimView {
   title: string
   presentation: {
     setting: string
-    patient: { age: number; sex: string }
+    patient: { age: number; sex: string; weight_kg?: number }
     chief_complaint: string
     vignette: string
   }
@@ -51,7 +51,7 @@ function investigationViews(def: DiagnosticSimDef, s: DiagnosticSimState): Inves
     if (!item) return []
     // The result exists in the definition all along; it reaches the view only once it is ready.
     return s.clock >= o.readyAt
-      ? [{ label: item.label, status: 'ready', readyAt: o.readyAt, result: item.result }]
+      ? [{ label: item.label, status: 'ready', readyAt: o.readyAt, result: o.result }]
       : [{ label: item.label, status: 'pending', readyAt: o.readyAt }]
   })
 }
@@ -61,7 +61,7 @@ export function viewOf(def: DiagnosticSimDef, s: DiagnosticSimState): Diagnostic
   const { setting, patient, chief_complaint, vignette } = def.presentation
   const base: DiagnosticSimView = {
     title: def.title,
-    presentation: { setting, patient, chief_complaint, vignette },
+    presentation: { setting, patient: { ...patient }, chief_complaint, vignette },
     vitals: fired.reduce<Record<string, string>>((v, e) => ({ ...v, ...e.vitals }), { ...def.presentation.vitals }),
     clock: s.clock,
     timeBudget: def.sim.time_budget,
@@ -71,10 +71,10 @@ export function viewOf(def: DiagnosticSimDef, s: DiagnosticSimState): Diagnostic
     treatments: answered(def.treatments, s.treated.map((t) => t.id)),
     alerts: fired.map((e) => e.message),
     search: s.lastSearch,
-    differential: s.differential,
+    differential: s.differential === null ? null : [...s.differential],
     differentialRequired: def.gates.differential_before_investigations,
     ended: s.ended,
   }
   if (!s.ended) return base
-  return { ...base, endReason: s.endReason ?? 'learner', debrief: def.debrief, modelPathway: def.model_pathway }
+  return { ...base, endReason: s.endReason ?? 'learner', debrief: def.debrief, modelPathway: [...def.model_pathway] }
 }

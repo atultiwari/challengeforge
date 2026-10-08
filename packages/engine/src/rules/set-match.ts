@@ -41,8 +41,9 @@ export const validateSetMatch: Validator<SetMatchRule> = (rule, payload) => {
   if (parsed === null) return { passed: false, message: 'The submitted flags were not in a readable form.' }
 
   // Aliases first, so both copies of a duplicate collapse to one item.
-  const aliases = rule.aliases ?? {}
-  const flags = dedupe(parsed.map((f) => ({ ...f, id: aliases[f.id] ?? f.id })))
+  const own = <V>(record: Readonly<Record<string, V>>, key: string): V | undefined =>
+    Object.hasOwn(record, key) ? record[key] : undefined
+  const flags = dedupe(parsed.map((f) => ({ ...f, id: own(rule.aliases, f.id) ?? f.id })))
   const expected = new Set(rule.expected_ids)
 
   let hits = 0
@@ -56,7 +57,7 @@ export const validateSetMatch: Validator<SetMatchRule> = (rule, payload) => {
     }
     // A real error tagged with the wrong category is a miss, not a false flag:
     // the learner did spot the sentence, they just misread why it is dangerous.
-    const accepted = f.category !== null && (rule.categories[f.id] === f.category || (rule.also_accept?.[f.id] ?? []).includes(f.category))
+    const accepted = f.category !== null && (own(rule.categories, f.id) === f.category || (own(rule.also_accept, f.id) ?? []).includes(f.category))
     if (rule.require_category && !accepted) continue
     hits += 1
     foundIds.push(f.id)

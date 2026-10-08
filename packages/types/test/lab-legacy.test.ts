@@ -31,6 +31,21 @@ describe('lab-legacy definition', () => {
     expect(def.scoring.max_attempts).toBeNull()
   })
 
+  it('the schema refuses mismatched hint costs, so a hint can never be free', () => {
+    expect(labLegacy.definitionSchema.safeParse({ ...fixture, hints: ['only one'] }).success).toBe(false)
+  })
+
+  it('lints rules that no learner could ever satisfy', () => {
+    const impossible: LabLegacyDef = {
+      ...def,
+      rule: { type: 'set_match', field: 'f', expected_ids: ['a'], min_hits: 2, max_false_positives: 0, require_category: false, categories: {}, also_accept: {}, aliases: {} },
+      scoring: { ...def.scoring, max_attempts: 3, reveal_after_attempts: 3 },
+    }
+    expect(labLegacy.lint(impossible).map((i) => i.path)).toEqual(expect.arrayContaining(['rule.min_hits', 'scoring.reveal_after_attempts']))
+    const tooMany: LabLegacyDef = { ...def, rule: { type: 'any_n_of', n: 3, rules: [def.rule.type === 'all_of' ? def.rule.rules[0]! : def.rule as never, { type: 'exact', field: 'x', expected: 'y', case_sensitive: false }] } }
+    expect(labLegacy.lint(tooMany).map((i) => i.path)).toContain('rule.n')
+  })
+
   it('lints a mismatch between hint costs and hint texts', () => {
     expect(labLegacy.lint(def)).toEqual([])
     const issues = labLegacy.lint({ ...def, hints: ['only one'] })
@@ -100,6 +115,22 @@ describe('lab-legacy play', () => {
     expect(second.attempt.status).toBe('terminal')
   })
 
+  it('running out of attempts closes the mission WITHOUT handing over the debrief', async () => {
+    const strict = { ...def, scoring: { ...def.scoring, max_attempts: 1 } }
+    const { attempt } = startAttempt(labLegacy, strict, ctx)
+    const r = await act(labLegacy, strict, attempt, { kind: 'submit', payload: WRONG }, { services: {}, at: at() })
+    if (!r.ok) throw new Error('expected ok')
+    expect(r.view.status).toBe('closed')
+    expect(r.view.debrief).toBeUndefined()
+    expect(r.view.reviewItems).toBeUndefined()
+  })
+
+  it('gives the view copies, so a consumer cannot corrupt the shared definition', () => {
+    const { view } = startAttempt(labLegacy, def, ctx)
+    expect(view.config).not.toBe(def.interaction_config)
+    expect(view.hintCosts).not.toBe(def.scoring.hint_costs)
+  })
+
   it('rejects malformed actions at the boundary', async () => {
     const { attempt } = startAttempt(labLegacy, def, ctx)
     for (const bad of [{ kind: 'submit' }, { kind: 'hint', index: -1 }, { kind: 'win' }]) {
@@ -136,6 +167,23 @@ describe('lab-legacy assessment and points', () => {
     }
     expect((await assess(labLegacy, def, attempt, events, {})).passed).toBe(true)
     expect((await assess(labLegacy, corrected, attempt, events, {})).passed).toBe(false)
+  })
+
+  it('does not call the judge again when grading a judged answer', async () => {
+    const judged: LabLegacyDef = {
+      ...def,
+      rule: { type: 'llm_rubric', goal_id: 'g', rubric: 'Did it?', show_patient_messages: false },
+      scoring: { ...def.scoring, hint_costs: [] },
+      hints: [],
+    }
+    const judge = vi.fn(async () => ({ goal_met: true, reason: '' }))
+    const transcript = [{ role: 'assistant' as const, content: 'done' }]
+    const { attempt } = startAttempt(labLegacy, judged, ctx)
+    const r = await act(labLegacy, judged, attempt, { kind: 'submit', payload: {} }, { services: { judge, transcript }, at: at() })
+    if (!r.ok) throw new Error('expected ok')
+    const a = await assess(labLegacy, judged, r.attempt, [r.event], { judge, transcript: [] })
+    expect(a.passed).toBe(true)
+    expect(judge).toHaveBeenCalledTimes(1)
   })
 
   it('replays to the same state from recorded grading results, without re-grading', async () => {

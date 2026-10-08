@@ -31,10 +31,19 @@ const firstNames = (spec: BeforeSpec): string =>
   (typeof spec.first === 'string' ? [spec.first] : spec.first).map((id) => nameOf(spec, id)).join(' or ')
 const criticalFlag = (spec: BaseSpec): Pick<Criterion, 'critical'> => (spec.critical ? { critical: true } : {})
 
-/** Index of the earliest step acting on any of the targets, or -1. */
-function firstIndex(steps: readonly TrajectoryStep[], targets: string | readonly string[]): number {
+/** Earlier in simulated time; same-time ties go to the lower sequence number. */
+const isEarlier = (a: TrajectoryStep, b: TrajectoryStep): boolean => a.time < b.time || (a.time === b.time && a.seq < b.seq)
+
+/** The earliest step acting on any of the targets (optionally only of some kinds). */
+function earliest(
+  steps: readonly TrajectoryStep[],
+  targets: string | readonly string[],
+  kinds?: readonly string[],
+): TrajectoryStep | undefined {
   const wanted = typeof targets === 'string' ? [targets] : targets
-  return steps.findIndex((s) => wanted.includes(s.target))
+  return steps
+    .filter((s) => wanted.includes(s.target) && (kinds === undefined || kinds.includes(s.kind)))
+    .reduce<TrajectoryStep | undefined>((best, s) => (best === undefined || isEarlier(s, best) ? s : best), undefined)
 }
 
 export interface CoverageSpec extends BaseSpec {
@@ -89,6 +98,11 @@ export function avoided(spec: AvoidedSpec, steps: readonly TrajectoryStep[]): Cr
 export interface BeforeSpec extends BaseSpec {
   /** One item, or any of several (the earliest counts). */
   first: string | readonly string[]
+  /**
+   * Only steps of these kinds count for `first`, e.g. ['result'] so that a
+   * test whose result is not back yet does not count as "known".
+   */
+  firstKinds?: readonly string[]
   /** `first` must happen before this, if this happens. */
   then?: string
   /** `first` must happen at or before this simulated time. */
@@ -97,15 +111,17 @@ export interface BeforeSpec extends BaseSpec {
   required?: boolean
 }
 
-/** Ordering and deadlines: "check potassium before insulin", "antibiotics within 60 minutes". */
+/**
+ * Ordering and deadlines, compared in simulated time: "potassium result back
+ * before insulin", "antibiotics within 60 minutes".
+ */
 export function before(spec: BeforeSpec, steps: readonly TrajectoryStep[]): Criterion {
-  const i = firstIndex(steps, spec.first)
-  const firstStep = i === -1 ? undefined : steps[i]
-  const j = spec.then === undefined ? -1 : firstIndex(steps, spec.then)
+  const firstStep = earliest(steps, spec.first, spec.firstKinds)
+  const thenStep = spec.then === undefined ? undefined : earliest(steps, spec.then)
 
-  const orderOk = j === -1 || (i !== -1 && i < j)
+  const orderOk = thenStep === undefined || (firstStep !== undefined && isEarlier(firstStep, thenStep))
   const deadlineOk = spec.byTime === undefined || (firstStep !== undefined && firstStep.time <= spec.byTime)
-  const requiredOk = !spec.required || i !== -1
+  const requiredOk = !spec.required || firstStep !== undefined
   const passed = orderOk && deadlineOk && requiredOk
 
   return {
@@ -141,6 +157,28 @@ export function efficiency(spec: EfficiencySpec, steps: readonly TrajectoryStep[
     max: spec.weight,
     passed,
     feedback: used.length === 0 ? 'No unnecessary items.' : `Not needed here: ${used.map((id) => nameOf(spec, id)).join(', ')}.`,
+    ...criticalFlag(spec),
+  }
+}
+
+export interface FrequencySpec extends BaseSpec {
+  /** Any of these items counts, e.g. a gas or a lab panel for potassium. */
+  items: readonly string[]
+  minCount: number
+  kinds?: readonly string[]
+}
+
+/** "Monitored repeatedly": done at least N times, with proportional credit. */
+export function frequency(spec: FrequencySpec, steps: readonly TrajectoryStep[]): Criterion {
+  const count = steps.filter((s) => spec.items.includes(s.target) && (spec.kinds === undefined || spec.kinds.includes(s.kind))).length
+  const passed = count >= spec.minCount
+  return {
+    id: spec.id,
+    label: spec.label,
+    score: spec.weight * Math.min(1, count / Math.max(1, spec.minCount)),
+    max: spec.weight,
+    passed,
+    feedback: `Done ${count} of the ${spec.minCount} times expected.`,
     ...criticalFlag(spec),
   }
 }

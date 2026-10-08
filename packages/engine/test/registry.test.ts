@@ -35,11 +35,18 @@ describe('createTypeRegistry', () => {
   })
 
   it('parses a definition with the right type, returning author-facing issues on failure', () => {
-    expect(registry.parseDefinition('quiz', 1, { answer: 'x' })).toEqual({ ok: true, definition: { answer: 'x' } })
+    expect(registry.parseDefinition('quiz', 1, { answer: 'x' })).toEqual({ ok: true, definition: { answer: 'x' }, warnings: [] })
     const bad = registry.parseDefinition('quiz', 1, { answer: '' })
     expect(bad.ok).toBe(false)
     if (bad.ok) throw new Error('expected failure')
     expect(bad.issues[0]?.path).toBe('answer')
+  })
+
+  it('runs the type lint after the schema, so cross-field errors block publishing', () => {
+    const strict = createTypeRegistry([{ ...fake('quiz', 1), lint: () => [{ path: 'answer', severity: 'error', message: 'Too easy.' }] }])
+    expect(strict.parseDefinition('quiz', 1, { answer: 'x' })).toMatchObject({ ok: false, issues: [{ message: 'Too easy.' }] })
+    const warnOnly = createTypeRegistry([{ ...fake('quiz', 1), lint: () => [{ path: 'answer', severity: 'warning', message: 'Hmm.' }] }])
+    expect(warnOnly.parseDefinition('quiz', 1, { answer: 'x' })).toMatchObject({ ok: true, warnings: [{ message: 'Hmm.' }] })
   })
 
   it('reports an unknown type instead of throwing', () => {

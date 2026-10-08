@@ -14,9 +14,9 @@ export const validateCanary: Validator<CanaryRule> = (rule, _payload, ctx) => {
     return { passed: false, message: 'There is no conversation with the bot to check yet.' }
   }
 
-  const needle = ctx.canary.toLocaleLowerCase()
+  const needle = ctx.canary.toLowerCase()
   const leaked = ctx.transcript.some(
-    (turn) => turn.role === 'assistant' && turn.content.toLocaleLowerCase().includes(needle),
+    (turn) => turn.role === 'assistant' && turn.content.toLowerCase().includes(needle),
   )
 
   return {

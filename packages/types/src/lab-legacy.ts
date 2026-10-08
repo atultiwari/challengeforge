@@ -27,7 +27,8 @@ import {
   type Services,
 } from '@challengeforge/engine'
 
-export const LabLegacyDefSchema = z.object({
+export const LabLegacyDefSchema = z
+  .object({
   title: z.string().min(1),
   story_brief: z.string().default(''),
   /** Which player component renders it (ported from the Lab's interaction enum). */
@@ -41,7 +42,12 @@ export const LabLegacyDefSchema = z.object({
   review_items: z
     .array(z.object({ id: z.string().min(1), label: z.string().min(1), explanation: z.string().min(1) }))
     .default([]),
-})
+  })
+  // A missing cost would make a hint free, so this is a hard error, not just lint.
+  .refine((d) => d.hints.length === d.scoring.hint_costs.length, {
+    path: ['hints'],
+    message: 'Each hint needs exactly one cost.',
+  })
 export type LabLegacyDef = z.infer<typeof LabLegacyDefSchema>
 
 export const LabLegacyActionSchema = z.discriminatedUnion('kind', [
@@ -77,12 +83,33 @@ export interface LabLegacyView {
 }
 
 /** Shape check for a recorded grading result, so replay never trusts a malformed row. */
-const RecordedResultSchema = z.object({
+const RecordedResultSchema = z.strictObject({
   correct: z.boolean(),
-  outcomes: z.array(z.object({ passed: z.boolean(), message: z.string() }).passthrough()),
+  outcomes: z.array(
+    z.strictObject({
+      passed: z.boolean(),
+      message: z.string(),
+      detail: z
+        .strictObject({ found: z.number().optional(), required: z.number().optional(), falsePositives: z.number().optional() })
+        .optional(),
+    }),
+  ),
   pointsPenalty: z.number(),
   foundIds: z.array(z.string()),
 })
+
+type LeafRule = Extract<LabLegacyDef['rule'], { field?: unknown } | { goal_id?: unknown }>
+
+function leavesOf(rule: LabLegacyDef['rule']): { leaf: LeafRule; path: string }[] {
+  if (rule.type === 'all_of' || rule.type === 'any_n_of') {
+    return rule.rules.map((leaf, i) => ({ leaf: leaf as LeafRule, path: `rule.rules.${i}` }))
+  }
+  return [{ leaf: rule as LeafRule, path: 'rule' }]
+}
+
+/** Judged rules are not repeatable: re-grading must reuse the recorded verdict. */
+const isDeterministic = (rule: LabLegacyDef['rule']): boolean =>
+  leavesOf(rule).every(({ leaf }) => leaf.type !== 'llm_rubric' && leaf.type !== 'canary')
 
 const policyState = (s: LabLegacyState): PolicyState => ({
   attempts: s.attempts,
@@ -119,10 +146,22 @@ function lint(def: LabLegacyDef): LintIssue[] {
       message: `There are ${def.hints.length} hints but ${def.scoring.hint_costs.length} hint costs.`,
     })
   }
-  const leaves = def.rule.type === 'all_of' || def.rule.type === 'any_n_of' ? def.rule.rules.length : 1
+  const leaves = leavesOf(def.rule)
   const labels = outcomeLabels(def)
-  if (labels.length > 0 && labels.length !== leaves) {
-    issues.push({ path: 'interaction_config.outcome_labels', severity: 'warning', message: `Expected ${leaves} labels.` })
+  if (labels.length > 0 && labels.length !== leaves.length) {
+    issues.push({ path: 'interaction_config.outcome_labels', severity: 'warning', message: `Expected ${leaves.length} labels.` })
+  }
+  if (def.rule.type === 'any_n_of' && def.rule.n > def.rule.rules.length) {
+    issues.push({ path: 'rule.n', severity: 'error', message: `Needs ${def.rule.n} of only ${def.rule.rules.length} parts.` })
+  }
+  for (const { leaf, path } of leaves) {
+    if (leaf.type === 'set_match' && leaf.min_hits > leaf.expected_ids.length) {
+      issues.push({ path: `${path}.min_hits`, severity: 'error', message: 'Requires more hits than there are items to find.' })
+    }
+  }
+  const { max_attempts, reveal_after_attempts } = def.scoring
+  if (max_attempts !== null && reveal_after_attempts !== null && reveal_after_attempts >= max_attempts) {
+    issues.push({ path: 'scoring.reveal_after_attempts', severity: 'warning', message: 'The attempts run out before "show me the answer" is offered.' })
   }
   return issues
 }
@@ -133,15 +172,16 @@ function view(def: LabLegacyDef, s: LabLegacyState): LabLegacyView {
     title: def.title,
     storyBrief: def.story_brief,
     interaction: def.interaction,
-    config: def.interaction_config,
+    config: { ...def.interaction_config },
     status,
     attemptsUsed: s.attempts,
-    hintCosts: def.scoring.hint_costs,
+    hintCosts: [...def.scoring.hint_costs],
     hints: s.hintsUsed.map((index) => ({ index, cost: def.scoring.hint_costs[index] ?? 0, text: def.hints[index] ?? '' })),
     lastOutcomes: s.lastResult?.outcomes ?? null,
     canReveal: canReveal(def.scoring, policyState(s)),
   }
-  if (status === 'open') return base
+  // The debrief is earned by solving or by choosing "show me the answer", not by running out of attempts.
+  if (status === 'open' || status === 'closed') return base
   const found = new Set(s.lastResult?.foundIds ?? [])
   return {
     ...base,
@@ -158,7 +198,11 @@ async function evaluate(
 ) {
   const lastSubmit = [...trajectory].reverse().find((e) => e.action.kind === 'submit')
   const payload = lastSubmit?.action.kind === 'submit' ? lastSubmit.action.payload : {}
-  const result = await evaluateRule(def.rule, payload, ruleCtx(env.ctx, env.services))
+  // Deterministic rules are re-run, so a corrected key re-grades; judged ones reuse the recorded verdict.
+  const result =
+    isDeterministic(def.rule) || final.lastResult === null
+      ? await evaluateRule(def.rule, payload, ruleCtx(env.ctx, env.services))
+      : final.lastResult
   const correct = result.correct && final.revealedAt === null && lastSubmit !== undefined
   const labels = outcomeLabels(def)
   const criteria: Criterion[] = result.outcomes.map((o, i) => ({

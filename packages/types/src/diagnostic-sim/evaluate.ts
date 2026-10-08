@@ -9,10 +9,12 @@ import {
   combineCriteria,
   coverage,
   efficiency,
+  frequency,
   matchesAnyTerm,
   type Assessment,
   type CriticalPolicy,
   type Criterion,
+  type TrajectoryStep,
 } from '@challengeforge/engine'
 import type { DiagnosticSimDef } from './schema'
 import type { DiagnosticSimState } from './state'
@@ -69,6 +71,75 @@ function differentialsCriterion(def: DiagnosticSimDef, s: DiagnosticSimState): C
   }
 }
 
+/**
+ * The recorded actions plus a 'result' step for every investigation whose
+ * result was back before the case ended, so rules can ask "was it KNOWN".
+ */
+function pathWithResults(s: DiagnosticSimState): TrajectoryStep[] {
+  const results = s.ordered
+    .filter((o) => o.readyAt <= s.clock)
+    .map((o) => ({ seq: o.seq, kind: 'result', target: o.id, time: o.readyAt }))
+  return [...s.trail, ...results]
+}
+
+function orderingCriteria(def: DiagnosticSimDef, path: readonly TrajectoryStep[], labels: Record<string, string>): Criterion[] {
+  return def.rubric.ordering.map((o) =>
+    before(
+      {
+        id: o.id,
+        label: o.label,
+        weight: o.weight,
+        labels,
+        first: o.first,
+        ...(o.first_kind === 'result' ? { firstKinds: ['result'] } : {}),
+        ...(o.first_kind === 'action' ? { firstKinds: ['ask', 'examine', 'order', 'treat'] } : {}),
+        ...(o.then === undefined ? {} : { then: o.then }),
+        ...(o.by_time === undefined ? {} : { byTime: o.by_time }),
+        ...(o.required === undefined ? {} : { required: o.required }),
+        ...(o.critical === undefined ? {} : { critical: o.critical }),
+      },
+      path,
+    ),
+  )
+}
+
+function monitoringCriteria(def: DiagnosticSimDef, path: readonly TrajectoryStep[], labels: Record<string, string>): Criterion[] {
+  return def.rubric.monitoring.map((m) =>
+    frequency(
+      {
+        id: m.id,
+        label: m.label,
+        weight: m.weight,
+        labels,
+        items: m.items,
+        minCount: m.min_count,
+        kinds: ['order', 'treat'],
+        ...(m.critical === undefined ? {} : { critical: m.critical }),
+      },
+      path,
+    ),
+  )
+}
+
+/** Each graded event the learner failed to prevent costs its weight (or fails the case). */
+function eventCriteria(def: DiagnosticSimDef, s: DiagnosticSimState): Criterion[] {
+  return def.events.flatMap((e) => {
+    if (!e.graded) return []
+    const prevented = !s.triggered.includes(e.id)
+    return [
+      {
+        id: e.id,
+        label: e.graded.label,
+        score: prevented ? e.graded.weight : 0,
+        max: e.graded.weight,
+        passed: prevented,
+        feedback: prevented ? 'Prevented.' : e.message,
+        ...(e.graded.critical ? { critical: true } : {}),
+      },
+    ]
+  })
+}
+
 function criticalPolicy(def: DiagnosticSimDef): CriticalPolicy {
   const c = def.rubric.critical
   return c.mode === 'cap' ? { mode: 'cap', capFraction: c.cap_fraction } : { mode: 'fail' }
@@ -78,35 +149,23 @@ export function evaluateCase(def: DiagnosticSimDef, s: DiagnosticSimState): Asse
   const { rubric } = def
   const w = rubric.weights
   const labels = labelsOf(def)
-  const path = s.trail
+  const path = pathWithResults(s)
   const essentialHistory = idsTagged(def.history, 'essential')
   const essentialExam = idsTagged(def.examination, 'essential')
   const essentialInvestigations = idsTagged(def.investigations, 'essential')
   const essentialTreatments = idsTagged(def.treatments, 'essential')
+  const wasteful = [...idsTagged(def.investigations, 'unnecessary', 'harmful'), ...idsTagged(def.treatments, 'not_recommended')]
 
   const criteria: Criterion[] = [
     coverage({ id: 'history', label: 'History', weight: w.history, labels, kinds: ['ask'], required: essentialHistory, min: rubric.min_history ?? essentialHistory.length }, path),
     coverage({ id: 'examination', label: 'Examination', weight: w.examination, labels, kinds: ['examine'], required: essentialExam, min: rubric.min_examination ?? essentialExam.length }, path),
     coverage({ id: 'investigations', label: 'Key investigations', weight: w.investigations, labels, kinds: ['order'], required: essentialInvestigations, min: rubric.min_investigations ?? essentialInvestigations.length }, path),
-    efficiency({ id: 'efficiency', label: 'Avoided unnecessary tests', weight: w.efficiency, labels, counted: idsTagged(def.investigations, 'unnecessary', 'harmful'), maxAllowed: rubric.max_unnecessary }, path),
+    efficiency({ id: 'efficiency', label: 'Avoided unnecessary tests and treatments', weight: w.efficiency, labels, counted: wasteful, maxAllowed: rubric.max_unnecessary }, path),
     coverage({ id: 'management', label: 'Management', weight: w.management, labels, kinds: ['treat'], required: essentialTreatments, min: rubric.min_management ?? essentialTreatments.length }, path),
     safetyCriterion(def, s, labels),
-    ...rubric.ordering.map((o) =>
-      before(
-        {
-          id: o.id,
-          label: o.label,
-          weight: o.weight,
-          labels,
-          first: o.first,
-          ...(o.then === undefined ? {} : { then: o.then }),
-          ...(o.by_time === undefined ? {} : { byTime: o.by_time }),
-          ...(o.required === undefined ? {} : { required: o.required }),
-          ...(o.critical === undefined ? {} : { critical: o.critical }),
-        },
-        path,
-      ),
-    ),
+    ...orderingCriteria(def, path, labels),
+    ...monitoringCriteria(def, path, labels),
+    ...eventCriteria(def, s),
     diagnosisCriterion(def, s),
     differentialsCriterion(def, s),
   ]

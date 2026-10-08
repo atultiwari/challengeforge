@@ -6,6 +6,7 @@ import caseJson from '../fixtures/diagnostic-sim/dka-young-adult.json'
 const def: DiagnosticSimDef = diagnosticSim.definitionSchema.parse(caseJson)
 const ctx = { attemptId: 'att-d1', userId: 'u1', challengeId: 'dka-young-adult', seed: 7 }
 const T0 = Date.parse('2026-10-08T22:40:00.000Z')
+const structuredCloneJson = (v: unknown): unknown => JSON.parse(JSON.stringify(v))
 
 type Step = Record<string, unknown>
 
@@ -30,7 +31,11 @@ const examine = (q: string, item: string): Step[] => [find('examination', q), { 
 const order = (q: string, item: string): Step[] => [find('investigations', q), { kind: 'order', item }]
 const treat = (q: string, item: string): Step[] => [find('treatments', q), { kind: 'treat', item }]
 
-/** A competent work-up, roughly the model pathway. */
+/**
+ * A competent work-up, following the model pathway: escalate early, fluids
+ * first, insulin and potassium only once a potassium RESULT is back, find
+ * the trigger, and re-check the gas after an hour.
+ */
 const GOOD_PATH: Step[] = [
   ...ask('diabetes', 'h_diabetes'),
   ...ask('insulin', 'h_insulin'),
@@ -44,13 +49,19 @@ const GOOD_PATH: Step[] = [
   ...order('glucose', 'i_cbg'),
   ...order('ketones', 'i_ketones'),
   ...order('blood gas', 'i_vbg'),
+  ...order('ecg', 'i_ecg'),
   ...treat('saline', 'm_fluids'),
+  ...treat('senior', 'm_senior_review'),
   ...order('urea', 'i_ue'),
   ...order('hcg', 'i_hcg'),
-  { kind: 'advance_time', minutes: 10 },
+  { kind: 'advance_time', minutes: 5 },
   ...treat('insulin infusion', 'm_frii'),
   ...treat('potassium', 'm_potassium'),
   ...treat('glargine', 'm_basal'),
+  ...treat('monitoring', 'm_monitoring'),
+  ...treat('antibiotic', 'm_antibiotic'),
+  { kind: 'advance_time', minutes: 30 },
+  { kind: 'order', item: 'i_vbg' },
   { kind: 'record_differential', terms: ['HHS', 'urinary tract infection', 'pancreatitis'] },
   { kind: 'submit_diagnosis', text: 'Diabetic ketoacidosis' },
 ]
@@ -65,6 +76,12 @@ describe('authoring: the doctor-shaped case is valid data', () => {
     expect(diagnosticSim.lint(def)).toEqual([])
   })
 
+  it('the schema itself refuses an id used in two catalogs', () => {
+    const raw = structuredCloneJson(caseJson) as { investigations: { id: string }[] }
+    raw.investigations[0]!.id = 'h_onset'
+    expect(diagnosticSim.definitionSchema.safeParse(raw).success).toBe(false)
+  })
+
   it('lint catches the mistakes an author is likely to make', () => {
     const broken: DiagnosticSimDef = {
       ...def,
@@ -74,10 +91,13 @@ describe('authoring: the doctor-shaped case is valid data', () => {
         ...def.rubric,
         min_history: 99,
         ordering: [{ id: 'x', label: 'x', first: ['i_nope'], then: 'm_frii', weight: 1 }],
+        monitoring: [{ id: 'm', label: 'm', items: ['i_hcg'], min_count: 2, weight: 1 }],
       },
     }
     const paths = diagnosticSim.lint(broken).map((i) => i.path)
-    expect(paths).toEqual(expect.arrayContaining(['history.12.id', 'events.0.unless_done', 'rubric.min_history', 'rubric.ordering.0.first']))
+    expect(paths).toEqual(
+      expect.arrayContaining(['history.12.id', 'events.0.unless_done', 'rubric.min_history', 'rubric.ordering.0.first', 'rubric.monitoring.0.items']),
+    )
   })
 })
 
@@ -120,6 +140,37 @@ describe('play: search-to-reveal and progressive disclosure', () => {
     expect(pending.view.investigations).toEqual([{ label: 'Urea and electrolytes', status: 'pending', readyAt: 61 }])
     const ready = await play([...order('urea', 'i_ue'), { kind: 'advance_time', minutes: 60 }])
     expect(ready.view.investigations[0]).toMatchObject({ status: 'ready', result: expect.stringContaining('K 5.6') })
+  })
+
+  it('results depend on what has been done: a repeat gas improves only with fluids and insulin', async () => {
+    const treated = await play(GOOD_PATH.slice(0, -2).concat([{ kind: 'advance_time', minutes: 15 }]))
+    const repeat = treated.view.investigations.filter((i) => i.label === 'Venous blood gas')
+    expect(repeat).toHaveLength(2)
+    expect(repeat[1]?.result).toContain('pH 7.19')
+
+    const untreated = await play([...order('blood gas', 'i_vbg'), { kind: 'advance_time', minutes: 60 }, { kind: 'order', item: 'i_vbg' }, { kind: 'advance_time', minutes: 15 }])
+    expect(untreated.view.investigations[1]?.result).toContain('pH 7.06')
+  })
+
+  it('a non-repeatable investigation cannot be ordered twice', async () => {
+    const { attempt } = await play(order('hcg', 'i_hcg'))
+    const r = await act(diagnosticSim, def, attempt, { kind: 'order', item: 'i_hcg' }, { services: {}, at: new Date(T0).toISOString() })
+    expect(r).toMatchObject({ ok: false, error: { typeCode: 'already_done' } })
+  })
+
+  it('shows the patient weight so the insulin dose can be calculated', () => {
+    expect(startAttempt(diagnosticSim, def, ctx).view.presentation.patient.weight_kg).toBe(60)
+  })
+
+  it('a search in one category never unlocks the same id in another', async () => {
+    // Lint and the schema forbid shared ids; this proves the step logic does not rely on that.
+    const clash: DiagnosticSimDef = { ...def, history: [...def.history, { ...def.history[0]!, id: 'i_ct_head', label: 'Head injury?', keywords: ['head'] }] }
+    let { attempt } = startAttempt(diagnosticSim, clash, ctx)
+    const env = { services: {}, at: new Date(T0).toISOString() }
+    const searched = await act(diagnosticSim, clash, attempt, find('history', 'head'), env)
+    if (!searched.ok) throw new Error('expected ok')
+    attempt = searched.attempt
+    expect(await act(diagnosticSim, clash, attempt, { kind: 'order', item: 'i_ct_head' }, env)).toMatchObject({ error: { typeCode: 'not_discovered' } })
   })
 
   it('the patient deteriorates at 60 minutes unless fluids were started', async () => {
@@ -194,6 +245,50 @@ describe('assessment: the reasoning path is graded, not just the answer', () => 
     const a = await assess(diagnosticSim, def, attempt, events, {})
     expect(a.criteria.find((c) => c.id === 'diagnosis')?.passed).toBe(true)
     expect(a.passed).toBe(false)
+    expect(a.criticalFailure).toBe(true)
+  })
+
+  it('a thorough work-up that never treats the patient fails', async () => {
+    const untreated = GOOD_PATH.filter((a) => !(a['kind'] === 'treat' || (a['kind'] === 'search' && a['category'] === 'treatments')))
+    const { attempt, events } = await play(untreated)
+    const a = await assess(diagnosticSim, def, attempt, events, {})
+    expect(a.passed).toBe(false)
+    expect(a.criteria.filter((c) => c.critical && !c.passed).map((c) => c.id)).toEqual(
+      expect.arrayContaining(['fluids_given', 'insulin_given']),
+    )
+  })
+
+  it('starting insulin after ORDERING a gas but before its result is back is a critical failure', async () => {
+    const hasty = [
+      ...GOOD_PATH.slice(0, 18),
+      ...order('blood gas', 'i_vbg'),
+      ...treat('saline', 'm_fluids'),
+      ...treat('insulin infusion', 'm_frii'),
+      { kind: 'submit_diagnosis', text: 'DKA' },
+    ]
+    const { attempt, events } = await play(hasty)
+    const a = await assess(diagnosticSim, def, attempt, events, {})
+    expect(a.criteria.find((c) => c.id === 'k_before_insulin')).toMatchObject({ passed: false, critical: true })
+  })
+
+  it('a not-recommended treatment (insulin bolus) costs efficiency marks', async () => {
+    const withBolus = [...GOOD_PATH.slice(0, -1), ...treat('insulin bolus', 'm_insulin_bolus'), GOOD_PATH.at(-1)!]
+    const good = await play(GOOD_PATH)
+    const bolus = await play(withBolus)
+    const a = await assess(diagnosticSim, def, good.attempt, good.events, {})
+    const b = await assess(diagnosticSim, def, bolus.attempt, bolus.events, {})
+    expect(b.criteria.find((c) => c.id === 'efficiency')?.score).toBeLessThan(a.criteria.find((c) => c.id === 'efficiency')!.score)
+  })
+
+  it('credits repeat monitoring and penalises letting the patient deteriorate', async () => {
+    const { attempt, events } = await play(GOOD_PATH)
+    const a = await assess(diagnosticSim, def, attempt, events, {})
+    expect(a.criteria.find((c) => c.id === 'repeat_gas')).toMatchObject({ passed: true })
+    expect(a.criteria.find((c) => c.id === 'ev_deteriorates')).toMatchObject({ passed: true, score: 5 })
+
+    const late = await play([{ kind: 'advance_time', minutes: 61 }, { kind: 'submit_diagnosis', text: 'DKA' }])
+    const b = await assess(diagnosticSim, def, late.attempt, late.events, {})
+    expect(b.criteria.find((c) => c.id === 'ev_deteriorates')).toMatchObject({ passed: false, score: 0 })
   })
 
   it('starting insulin before potassium is known is a critical failure', async () => {
