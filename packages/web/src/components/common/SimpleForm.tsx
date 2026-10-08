@@ -6,11 +6,14 @@ import { postJson } from '@/lib/api'
 export interface FieldSpec {
   name: string
   label: string
-  type: 'text' | 'email' | 'select' | 'datetime-local' | 'hidden'
+  type: 'text' | 'email' | 'password' | 'select' | 'datetime-local' | 'hidden'
   required?: boolean
   value?: string
   maxLength?: number
   help?: string
+  /** e.g. "new-password" for a password being chosen. */
+  autoComplete?: string
+  minLength?: number
   /** For selects: [value, label] pairs. */
   options?: readonly (readonly [string, string])[]
 }
@@ -52,8 +55,11 @@ export function SimpleForm({ url, fields, submitLabel, then = { refresh: true },
     const r = await postJson<Record<string, unknown>>(url, bodyOf(form, fields))
     setBusy(false)
     if (!r.ok) return setError(r.error.message)
-    if ('goTo' in then) router.push(then.goTo.replace(/\{(\w+)\}/g, (_, k: string) => encodeURIComponent(String(r.data[k] ?? ''))))
-    else {
+    if ('goTo' in then) {
+      router.push(then.goTo.replace(/\{(\w+)\}/g, (_, k: string) => encodeURIComponent(String(r.data[k] ?? ''))))
+      // Shared layouts (the header) survive client navigation: refresh so they show what just changed.
+      router.refresh()
+    } else {
       // Saved: clear one-off inputs; fields with stored values show them again after the refresh.
       element.reset()
       router.refresh()
@@ -81,6 +87,8 @@ export function SimpleForm({ url, fields, submitLabel, then = { refresh: true },
                 defaultValue={f.value}
                 required={f.required}
                 maxLength={f.maxLength ?? 200}
+                minLength={f.minLength}
+                autoComplete={f.autoComplete}
               />
             )}
             {f.help && <p className="field-help">{f.help}</p>}

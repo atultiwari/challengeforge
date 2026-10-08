@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start --port 3100",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "tsx e2e/prepare-db.ts && playwright test"
+    "test:e2e": "tsx e2e/prepare-db.ts && playwright test && tsx e2e-setup/prepare-db.ts && playwright test -c playwright.setup.config.ts"
   },
   "dependencies": {
     "@challengeforge/db": "workspace:*",

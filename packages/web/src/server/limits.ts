@@ -28,6 +28,7 @@ const PUBLIC_LIMITERS = {
   ltiLogin: createRateLimiter(30, MINUTE),
   ltiLaunch: createRateLimiter(30, MINUTE),
   webhook: createRateLimiter(120, MINUTE),
+  setup: createRateLimiter(10, MINUTE),
 } as const
 
 export function withinPublicLimit(kind: keyof typeof PUBLIC_LIMITERS, request: Request): boolean {

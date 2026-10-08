@@ -36,9 +36,13 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "e2e/**/*.ts",
+    "e2e-setup/**/*.ts",
+    "playwright.setup.config.ts",
     "playwright.config.ts",
     ".next-e2e/types/**/*.ts",
-    ".next-e2e/dev/types/**/*.ts"
+    ".next-e2e/dev/types/**/*.ts",
+    ".next-e2e-setup/types/**/*.ts",
+    ".next-e2e-setup/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

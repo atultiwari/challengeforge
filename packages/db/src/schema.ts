@@ -295,6 +295,7 @@ export interface Database {
   lti_score_outbox: LtiScoreOutboxTable
   site_settings: SiteSettingsTable
   site_files: SiteFilesTable
+  setup_tokens: SetupTokensTable
 }
 
 export type PackAccess = 'open' | 'restricted'
@@ -463,6 +464,12 @@ export interface SiteSettingsTable {
   site_id: string
   settings: Json
   updated_at: Timestamp
+}
+
+export interface SetupTokensTable {
+  token_hash: string
+  site_id: string
+  expires_at: Timestamp
 }
 
 export interface SiteFilesTable {

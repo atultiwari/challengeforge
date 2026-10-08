@@ -67,7 +67,18 @@ pnpm release
 | `PAYMENTS_PROVIDER` | `none` (default), `razorpay` or `stripe`. See section 7. |
 | `BYOK_ENCRYPTION_KEY` | Optional. Generate with `openssl rand -base64 32`; it lets learners use their own API keys. |
 
-## 4. First-time setup (hPanel → Advanced → SSH access)
+## 4. First-time setup
+
+### Option A: in the browser (no SSH)
+
+1. Add two more environment variables in hPanel:
+   - `SETUP_TOKEN`: 24 or more random characters, e.g. from `openssl rand -base64 30`;
+   - `AUTO_MIGRATE=true`, which is the default: the app creates and upgrades its database tables when it starts.
+2. Restart the app and open your site. It sends you to **/setup**.
+3. Paste the setup token, choose the site name and look, and create your admin account.
+4. The wizard then closes for good. Remove `SETUP_TOKEN` from hPanel.
+
+### Option B: from SSH (hPanel → Advanced → SSH access)
 
 Panel environment variables are usually **not** present in an SSH shell.
 Export them for these commands only:

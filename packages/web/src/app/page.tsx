@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { listMyCertificates, listMyCohorts, listMyProgress, listPlayable, lockedChallengeIds, type ChallengeSummary, type Cohort, type ProgressRow } from '@challengeforge/db'
+import { redirect } from 'next/navigation'
+import { listMyCertificates, listMyCohorts, listMyProgress, needsSetup, listPlayable, lockedChallengeIds, type ChallengeSummary, type Cohort, type ProgressRow } from '@challengeforge/db'
 import { db } from '@/server/db'
 import { mailer } from '@/server/mail'
 import { ConfirmEmailNotice } from '@/components/auth/ConfirmEmailNotice'
@@ -16,6 +17,8 @@ function groupBySection(challenges: readonly ChallengeSummary[]): [string, Chall
 
 export default async function CatalogPage() {
   const { scope, user } = await currentScope()
+  // A fresh install: send the first visitor to the setup wizard.
+  if (!user && (await needsSetup(db(), scope.siteId))) redirect('/setup')
   const [challenges, progress, cohorts] = await Promise.all([
     listPlayable(db(), scope),
     user ? listMyProgress(db(), scope) : Promise.resolve([] as ProgressRow[]),

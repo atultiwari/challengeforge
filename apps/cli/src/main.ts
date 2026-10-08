@@ -7,6 +7,7 @@
  *   challengeforge import-pack <dir>       import a pack (add --publish to publish it)
  *   challengeforge publish-pack <slug>     publish every challenge in an imported pack
  *   challengeforge create-admin            create (or promote) the site's administrator
+ *   challengeforge setup-token             print a one-hour token for the /setup wizard (fresh sites only)
  *   challengeforge reset-password          set a new password (from NEW_PASSWORD) and sign the person out
  *   challengeforge run-jobs                advance background jobs (run from cron every few minutes)
  *   challengeforge export-pack <slug> <dir> write a pack (latest versions + assets) to a directory
@@ -14,7 +15,7 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { Command } from 'commander'
-import { advanceJob, closeStaleReservations, createDb, purgeExpiredLti, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
+import { advanceJob, closeStaleReservations, createDb, createSetupToken, needsSetup, purgeExpiredLti, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
 import { createServiceRunners, sendDueLtiScores, servicesConfigFromEnv } from '@challengeforge/services'
 import { registry } from '@challengeforge/types'
 import { loadConfig } from './config'
@@ -104,6 +105,20 @@ program
       const userId = existing?.id ?? (await createUserWithPassword(db, options.email, options.name, process.env['ADMIN_PASSWORD']))
       await grantRoleUnchecked(db, site.id, userId, 'admin')
       process.stdout.write(`${existing ? 'Promoted' : 'Created'} ${options.email} as admin of ${site.slug}.\n`)
+    }),
+  )
+
+program
+  .command('setup-token')
+  .description('Print a one-hour token for the browser setup wizard at /setup (only while the site has no admin)')
+  .action(() =>
+    withDb(async (db, config) => {
+      const site = await ensureSite(db, config.siteSlug, config.siteName)
+      if (!(await needsSetup(db, site.id))) {
+        process.stdout.write('This site already has an admin; the setup wizard is closed.\n')
+        return
+      }
+      process.stdout.write(`Setup token (valid for one hour): ${await createSetupToken(db, site.id)}\nOpen /setup on your site and paste it there.\n`)
     }),
   )
 
