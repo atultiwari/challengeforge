@@ -32,6 +32,7 @@ describe('one contract, both paradigms', () => {
     expect(builtInTypes.map((t) => `${t.id}@${t.version}:${t.paradigm}`)).toEqual([
       'lab-legacy@1:static',
       'diagnostic-sim@1:interactive',
+      'question-set@1:static',
     ])
   })
 
