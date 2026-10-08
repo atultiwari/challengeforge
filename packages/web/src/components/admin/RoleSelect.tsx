@@ -24,6 +24,7 @@ export function RoleSelect({ userId, role, isSelf }: { userId: string; role: Rol
       >
         <option value="learner">Learner</option>
         <option value="author">Author</option>
+        <option value="editor">Editor</option>
         <option value="admin">Admin</option>
       </select>
       {error && <span role="alert" className="text-xs text-danger">{error}</span>}

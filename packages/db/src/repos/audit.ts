@@ -15,6 +15,8 @@ export type AuditAction =
   | 'assessment.overridden'
   | 'pack.imported'
   | 'account.password_reset'
+  | 'collaborator.added'
+  | 'collaborator.removed'
 
 export interface AuditEntry {
   action: AuditAction

@@ -11,7 +11,7 @@ type NullableTimestamp = ColumnType<Date | null, Date | null, Date | null>
 /** MySQL BOOLEAN is TINYINT(1): reads back as 0/1. */
 type Bool = ColumnType<number | boolean, boolean, boolean>
 
-export type Role = 'learner' | 'author' | 'admin'
+export type Role = 'learner' | 'author' | 'editor' | 'admin'
 export type ChallengeStatus = 'draft' | 'in_review' | 'published' | 'archived'
 
 export interface SitesTable {
@@ -270,6 +270,15 @@ export interface Database {
   llm_credentials: LlmCredentialsTable
   jobs: JobsTable
   audit_log: AuditLogTable
+  challenge_collaborators: ChallengeCollaboratorsTable
+}
+
+export interface ChallengeCollaboratorsTable {
+  challenge_id: string
+  user_id: string
+  site_id: string
+  added_by: string
+  created_at: Timestamp
 }
 
 export interface AuditLogTable {

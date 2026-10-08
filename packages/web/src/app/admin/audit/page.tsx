@@ -12,6 +12,8 @@ const LABELS: Record<AuditRecord['action'], string> = {
   'assessment.overridden': 'Overrode a result',
   'pack.imported': 'Imported a pack',
   'account.password_reset': 'Reset their password',
+  'collaborator.added': 'Added a co-author',
+  'collaborator.removed': 'Removed a co-author',
 }
 
 /** Details as short "key: value" pairs; values are shown as text, never as markup. */

@@ -43,7 +43,7 @@ export class ValidationError extends Error {
   }
 }
 
-const RANK: Record<Role, number> = { learner: 1, author: 2, admin: 3 }
+const RANK: Record<Role, number> = { learner: 1, author: 2, editor: 3, admin: 4 }
 
 export function requireSignedIn(scope: Scope): Principal {
   if (!scope.principal) throw new ForbiddenError('Sign in first.')

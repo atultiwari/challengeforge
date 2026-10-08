@@ -13,7 +13,7 @@ export async function SiteHeader() {
         </Link>
         <Link href="/" className="text-sm hover:underline">Challenges</Link>
         {hasRole(scope, 'author') && <Link href="/author" className="text-sm hover:underline">Author</Link>}
-        {hasRole(scope, 'admin') && <Link href="/admin" className="text-sm hover:underline">Admin</Link>}
+        {hasRole(scope, 'editor') && <Link href="/admin" className="text-sm hover:underline">{hasRole(scope, 'admin') ? 'Admin' : 'Review'}</Link>}
         <div className="ml-auto flex items-center gap-4">
           {user ? (
             <>

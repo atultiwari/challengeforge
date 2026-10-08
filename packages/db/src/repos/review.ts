@@ -23,7 +23,7 @@ export interface ReviewItem {
 }
 
 export async function listReviewQueue(db: Db, scope: Scope): Promise<ReviewItem[]> {
-  requireRole(scope, 'admin')
+  requireRole(scope, 'editor')
   const rows = await db
     .selectFrom('assessments')
     .innerJoin('attempts', 'attempts.id', 'assessments.attempt_id')
@@ -82,7 +82,7 @@ export interface Override {
 
 /** An admin confirms or overturns a result waiting for review; it is marked overridden with the reviewer recorded. */
 export async function overrideAssessment(db: Db, scope: Scope, attemptId: string, override: Override): Promise<void> {
-  const admin = requireRole(scope, 'admin')
+  const admin = requireRole(scope, 'editor')
   const attempt = await db
     .selectFrom('attempts')
     .innerJoin('assessments', 'assessments.attempt_id', 'attempts.id')

@@ -310,11 +310,11 @@ export function servicesFor(db: Db, deps: AttemptDeps, challengeId: string): Ser
   return { loadDataset: datasetLoaderFor(db, challengeId), ...(deps.services ?? {}) }
 }
 
-/** Reads an attempt: its owner, or an admin reviewing it. */
+/** Reads an attempt: its owner, or an editor or admin reviewing it. */
 export async function getAttempt(db: Db, scope: Scope, deps: AttemptDeps, attemptId: string): Promise<AttemptSnapshot> {
   const p = requireSignedIn(scope)
   let query = db.selectFrom('attempts').select(ATTEMPT_COLUMNS).where('id', '=', attemptId).where('site_id', '=', scope.siteId)
-  if (!hasRole(scope, 'admin')) query = query.where('user_id', '=', p.userId)
+  if (!hasRole(scope, 'editor')) query = query.where('user_id', '=', p.userId)
   const row = await query.executeTakeFirst()
   // Someone else's attempt is "not found", so ids cannot be probed.
   if (!row) throw new NotFoundError('Attempt not found.')

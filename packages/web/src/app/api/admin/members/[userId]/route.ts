@@ -3,7 +3,7 @@ import { db } from '@/server/db'
 import { fail, ok } from '@/server/http'
 import { mutation } from '@/server/route'
 
-const ROLES: readonly Role[] = ['learner', 'author', 'admin']
+const ROLES: readonly Role[] = ['learner', 'author', 'editor', 'admin']
 
 export async function POST(request: Request, ctx: { params: Promise<{ userId: string }> }) {
   const { userId } = await ctx.params

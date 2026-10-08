@@ -6,6 +6,9 @@ export const BASE_URL = `http://localhost:${PORT}`
 /** Outgoing mail lands here as JSON files during E2E (MAIL_MODE=file is refused in production). */
 export const MAIL_OUTBOX = `${process.cwd()}/.e2e-mail`
 
+/** A test-only administrator, created by prepare-db through the real CLI. */
+export const E2E_ADMIN = { email: 'e2e-admin@example.test', password: 'e2e-admin-password-123' }
+
 export const E2E_ENV: Record<string, string> = {
   DATABASE_URL: `${SERVER_URL}/${E2E_DB}`,
   APP_URL: BASE_URL,

@@ -7,7 +7,8 @@ import { createHash } from 'node:crypto'
 import type { Db } from '../client'
 import { newId } from '../ids'
 import type { DatasetLoader, DatasetRow } from '@challengeforge/engine'
-import { NotFoundError, hasRole, requireRole, requireSignedIn, type Scope } from '../scope'
+import { NotFoundError, requireRole, requireSignedIn, type Scope } from '../scope'
+import { canEdit } from './collaborators'
 
 /** MEDIUMBLOB limit, less headroom. */
 export const MAX_ASSET_BYTES = 15 * 1024 * 1024
@@ -84,11 +85,11 @@ export interface AssetBody {
 
 /**
  * An asset of a PUBLISHED challenge, for a signed-in learner. Gated assets
- * (results revealed by play, Phase 2) are refused. Admins may read any asset
- * on their site; authors may also read every asset of their OWN challenges.
+ * (results revealed by play, Phase 2) are refused. Editors and admins may read
+ * any asset on their site; authors may read every asset of challenges they edit.
  */
 export async function getAssetForPlay(db: Db, scope: Scope, challengeId: string, path: string): Promise<AssetBody> {
-  const p = requireSignedIn(scope)
+  requireSignedIn(scope)
   const row = await db
     .selectFrom('assets')
     .innerJoin('challenges', 'challenges.id', 'assets.challenge_id')
@@ -106,7 +107,7 @@ export async function getAssetForPlay(db: Db, scope: Scope, challengeId: string,
     .where('challenges.site_id', '=', scope.siteId)
     .executeTakeFirst()
   if (!row) throw new NotFoundError('Asset not found.')
-  const editor = hasRole(scope, 'admin') || (hasRole(scope, 'author') && row.createdBy === p.userId)
+  const editor = await canEdit(db, scope, { id: challengeId, created_by: row.createdBy })
   const playable = row.publishedVersionId !== null && row.status !== 'archived' && row.visibility === 'public'
   if (!editor && !playable) throw new NotFoundError('Asset not found.')
   return { contentType: row.contentType, bytes: row.bytes, sha256: row.sha256 }

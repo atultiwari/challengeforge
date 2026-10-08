@@ -1,10 +1,11 @@
 import { notFound } from 'next/navigation'
-import { ForbiddenError, NotFoundError, getForAuthoring } from '@challengeforge/db'
+import { ForbiddenError, NotFoundError, getForAuthoring, hasRole, listCollaborators } from '@challengeforge/db'
 import { authoringSchema, isFormAuthored, type QuestionSetDef } from '@challengeforge/types'
 import { QuestionSetEditor } from '@/components/author/QuestionSetEditor'
 import { SchemaDefinitionEditor } from '@/components/author/SchemaDefinitionEditor'
 import type { JsonSchema } from '@/lib/schema-form/model'
 import { WorkflowControls } from '@/components/author/WorkflowControls'
+import { CollaboratorsPanel } from '@/components/author/CollaboratorsPanel'
 import { db } from '@/server/db'
 import { requirePageRole } from '@/server/guards'
 
@@ -17,9 +18,9 @@ export default async function EditChallenge({
 }) {
   const [{ challengeId }, { saved }] = await Promise.all([params, searchParams])
   const scope = await requirePageRole('author', `/author/${challengeId}`)
-  let challenge
+  let challenge, collaborators
   try {
-    challenge = await getForAuthoring(db(), scope, challengeId)
+    ;[challenge, collaborators] = await Promise.all([getForAuthoring(db(), scope, challengeId), listCollaborators(db(), scope, challengeId)])
   } catch (err) {
     if (err instanceof NotFoundError || err instanceof ForbiddenError) notFound()
     throw err
@@ -41,6 +42,11 @@ export default async function EditChallenge({
         version={challenge.version}
         hasUnpublishedChanges={challenge.publishedVersionId !== challenge.versionId}
         canPublish={challenge.canPublish}
+      />
+      <CollaboratorsPanel
+        challengeId={challenge.id}
+        initial={collaborators}
+        canManage={hasRole(scope, 'editor') || challenge.createdBy === scope.principal?.userId}
       />
       {challenge.typeId === 'question-set' ? (
         <QuestionSetEditor key={challenge.versionId} challengeId={challenge.id} initial={challenge.definition as QuestionSetDef} />

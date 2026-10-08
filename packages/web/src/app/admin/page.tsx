@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { listForAuthoring, listMembers, listReviewQueue } from '@challengeforge/db'
+import { hasRole, listForAuthoring, listMembers, listReviewQueue } from '@challengeforge/db'
 import { RoleSelect } from '@/components/admin/RoleSelect'
 import { db } from '@/server/db'
 import { requirePageRole } from '@/server/guards'
@@ -7,15 +7,17 @@ import { requirePageRole } from '@/server/guards'
 export const metadata = { title: 'Admin' }
 
 export default async function AdminPage() {
-  const scope = await requirePageRole('admin', '/admin')
-  const [members, challenges, reviews] = await Promise.all([listMembers(db(), scope), listForAuthoring(db(), scope), listReviewQueue(db(), scope)])
+  // Editors review and publish here; people and the audit log are for admins.
+  const scope = await requirePageRole('editor', '/admin')
+  const isAdmin = hasRole(scope, 'admin')
+  const [members, challenges, reviews] = await Promise.all([isAdmin ? listMembers(db(), scope) : Promise.resolve([]), listForAuthoring(db(), scope), listReviewQueue(db(), scope)])
   const awaiting = challenges.filter((c) => c.status === 'in_review' || c.status === 'draft')
   return (
     <div className="space-y-10">
       <header>
         <p className="eyebrow">Admin</p>
-        <h1 className="text-4xl">Site administration</h1>
-        <p className="mt-2 text-sm"><Link className="underline" href="/admin/audit">Audit log</Link></p>
+        <h1 className="text-4xl">{isAdmin ? 'Site administration' : 'Review and publishing'}</h1>
+        {isAdmin && <p className="mt-2 text-sm"><Link className="underline" href="/admin/audit">Audit log</Link></p>}
       </header>
       <section className="space-y-3">
         <h2 className="text-2xl">Results waiting for review</h2>
@@ -50,6 +52,7 @@ export default async function AdminPage() {
           </ul>
         )}
       </section>
+{isAdmin && (
       <section className="space-y-3">
         <h2 className="text-2xl">People</h2>
         <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
@@ -63,6 +66,7 @@ export default async function AdminPage() {
           ))}
         </ul>
       </section>
+      )}
     </div>
   )
 }

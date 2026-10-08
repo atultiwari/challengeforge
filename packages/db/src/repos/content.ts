@@ -1,7 +1,7 @@
 /**
  * Packs, challenges and their immutable versions, with the draft → in review
- * → published workflow (PLAN.md §3.8). Authors edit their own challenges;
- * only admins publish. Learners only ever see the published version.
+ * → published workflow (PLAN.md §3.8). Authors edit their own challenges and
+ * those they co-author; editors and admins edit any and publish. Learners only ever see the published version.
  */
 import type { TypeRegistry } from '@challengeforge/engine'
 import type { Db } from '../client'
@@ -11,6 +11,7 @@ import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireRole, t
 import type { ChallengeStatus } from '../schema'
 import { withDeadlockRetry } from '../tx'
 import { recordAudit } from './audit'
+import { canEdit } from './collaborators'
 
 export interface ChallengeSummary {
   id: string
@@ -128,9 +129,9 @@ interface OwnedChallenge {
   created_by: string | null
 }
 
-/** Loads a challenge the caller may EDIT: their own as an author, any as an admin. */
+/** Loads a challenge the caller may EDIT: their own or co-authored as an author, any as an editor. */
 async function loadEditable(db: Db, scope: Scope, challengeId: string): Promise<OwnedChallenge> {
-  const p = requireRole(scope, 'author')
+  requireRole(scope, 'author')
   const row = await db
     .selectFrom('challenges')
     .select(['id', 'type_id', 'type_version', 'status', 'created_by'])
@@ -138,7 +139,7 @@ async function loadEditable(db: Db, scope: Scope, challengeId: string): Promise<
     .where('site_id', '=', scope.siteId)
     .executeTakeFirst()
   if (!row) throw new NotFoundError('Challenge not found.')
-  if (p.role !== 'admin' && row.created_by !== p.userId) throw new ForbiddenError()
+  if (!(await canEdit(db, scope, row))) throw new ForbiddenError()
   return row
 }
 
@@ -178,12 +179,12 @@ export async function submitForReview(db: Db, scope: Scope, challengeId: string)
 }
 
 /**
- * Publishes the LATEST version. Admins only: they are the reviewers, so they
- * may also publish a draft directly. Locked, so a save in flight cannot
+ * Publishes the LATEST version. Editors and admins only: they are the
+ * reviewers, so they may also publish a draft directly. Locked, so a save in flight cannot
  * leave the challenge pointing at an older version.
  */
 export async function publish(db: Db, scope: Scope, challengeId: string): Promise<void> {
-  requireRole(scope, 'admin')
+  requireRole(scope, 'editor')
   await withDeadlockRetry(() =>
     db.transaction().execute(async (trx) => {
       const challenge = await trx
@@ -212,7 +213,7 @@ export async function publish(db: Db, scope: Scope, challengeId: string): Promis
 }
 
 export async function archive(db: Db, scope: Scope, challengeId: string): Promise<void> {
-  requireRole(scope, 'admin')
+  requireRole(scope, 'editor')
   const result = await db
     .updateTable('challenges')
     .set({ status: 'archived', updated_at: new Date() })
@@ -252,7 +253,7 @@ export async function listPlayable(db: Db, scope: Scope): Promise<ChallengeSumma
   return rows.map((r) => ({ ...r, sectionPosition: r.sectionPosition ?? 0 }))
 }
 
-/** What an author may edit: their own (all of them for an admin). */
+/** What an author may edit: their own and co-authored ones (all of them for an editor). */
 export async function listForAuthoring(db: Db, scope: Scope): Promise<ChallengeSummary[]> {
   const p = requireRole(scope, 'author')
   let query = db
@@ -261,7 +262,14 @@ export async function listForAuthoring(db: Db, scope: Scope): Promise<ChallengeS
     .leftJoin('pack_sections', 'pack_sections.id', 'challenges.section_id')
     .select(summaryColumns)
     .where('challenges.site_id', '=', scope.siteId)
-  if (p.role !== 'admin') query = query.where('challenges.created_by', '=', p.userId)
+  if (!hasRole(scope, 'editor')) {
+    query = query.where((eb) =>
+      eb.or([
+        eb('challenges.created_by', '=', p.userId),
+        eb.exists(eb.selectFrom('challenge_collaborators').select('challenge_collaborators.user_id').whereRef('challenge_collaborators.challenge_id', '=', 'challenges.id').where('challenge_collaborators.user_id', '=', p.userId)),
+      ]),
+    )
+  }
   const rows = await query.orderBy('challenges.updated_at', 'desc').limit(500).execute()
   return rows.map((r) => ({ ...r, sectionPosition: r.sectionPosition ?? 0 }))
 }
@@ -292,6 +300,7 @@ export interface AuthoringView extends PlayableChallenge {
   status: ChallengeStatus
   version: number
   publishedVersionId: string | null
+  createdBy: string | null
   canPublish: boolean
 }
 
@@ -309,6 +318,7 @@ export async function getForAuthoring(db: Db, scope: Scope, challengeId: string)
       'challenges.type_version as typeVersion',
       'challenges.status as status',
       'challenges.published_version_id as publishedVersionId',
+      'challenges.created_by as createdBy',
       'challenge_versions.id as versionId',
       'challenge_versions.version as version',
       'challenge_versions.definition as definition',
@@ -318,7 +328,7 @@ export async function getForAuthoring(db: Db, scope: Scope, challengeId: string)
     .orderBy('challenge_versions.version', 'desc')
     .limit(1)
     .executeTakeFirstOrThrow()
-  return { ...row, definition: fromJson(row.definition), canPublish: hasRole(scope, 'admin') }
+  return { ...row, definition: fromJson(row.definition), canPublish: hasRole(scope, 'editor') }
 }
 
 /** Internal: a version by id, after the caller has authorised access to its challenge. */

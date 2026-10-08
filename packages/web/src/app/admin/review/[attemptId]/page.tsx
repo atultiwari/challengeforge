@@ -11,7 +11,7 @@ export const metadata = { title: 'Review a result' }
 /** What the learner actually did (e.g. the whole conversation), next to the automatic result. */
 export default async function ReviewPage({ params }: { params: Promise<{ attemptId: string }> }) {
   const { attemptId } = await params
-  const scope = await requirePageRole('admin', `/admin/review/${attemptId}`)
+  const scope = await requirePageRole('editor', `/admin/review/${attemptId}`)
   let attempt
   try {
     attempt = await getAttempt(db(), scope, attemptDeps, attemptId)
