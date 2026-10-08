@@ -25,6 +25,20 @@ beforeAll(async () => {
 })
 afterAll(async () => t.close())
 
+/**
+ * A promise settled from outside. Created BEFORE the call that awaits it, so
+ * releasing it can never race with the service call starting.
+ */
+function deferred<T = unknown>() {
+  let resolve!: (value: T) => void
+  let reject!: (cause: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 /** A fake service runner: a canned bot reply, and a canned verdict for grading. */
 function runner(onCall?: (req: ServiceRequest) => Promise<void>): AttemptDeps['runService'] {
   return async (req) => {
@@ -61,8 +75,8 @@ describe('actions that need a model', () => {
   it('refuses a second action while one is waiting on the model', async () => {
     const who = await createUser(t.db, s.site.id, 'learner', 'impatient')
     const { attemptId } = await startOrResume(t.db, who, { registry }, challengeId)
-    let release: () => void = () => undefined
-    const slow: AttemptDeps = { registry, runService: runner(() => new Promise<void>((resolve) => { release = resolve })) }
+    const gate = deferred<void>()
+    const slow: AttemptDeps = { registry, runService: runner(() => gate.promise) }
     const first = performAction(t.db, who, slow, attemptId, { kind: 'send', text: 'one' })
     await vi.waitFor(async () => {
       const row = await t.db.selectFrom('attempts').select('pending_since').where('id', '=', attemptId).executeTakeFirstOrThrow()
@@ -70,7 +84,7 @@ describe('actions that need a model', () => {
     })
     const second = await performAction(t.db, who, { registry, runService: runner() }, attemptId, { kind: 'send', text: 'two' })
     expect(second).toMatchObject({ ok: false, error: { code: 'busy' } })
-    release()
+    gate.resolve()
     expect(await first).toMatchObject({ ok: true })
   })
 
@@ -115,23 +129,23 @@ describe('stale calls never touch a newer action (review H1, H2)', () => {
     const who = await createUser(t.db, s.site.id, 'learner', 'stale-fail')
     const { attemptId } = await startOrResume(t.db, who, { registry }, challengeId)
     let clock = new Date('2026-10-08T10:00:00Z')
-    let releaseA: (v?: unknown) => void = () => undefined
-    let releaseB: (v?: unknown) => void = () => undefined
-    const depsA: AttemptDeps = { registry, now: () => clock, runService: () => new Promise((_, reject) => { releaseA = reject }), onError: () => undefined }
+    const replyA = deferred()
+    const replyB = deferred()
+    const depsA: AttemptDeps = { registry, now: () => clock, runService: () => replyA.promise, onError: () => undefined }
     const a = performAction(t.db, who, depsA, attemptId, { kind: 'send', text: 'A' })
     await vi.waitFor(async () => expect((await t.db.selectFrom('attempts').select('pending_since').where('id', '=', attemptId).executeTakeFirstOrThrow()).pending_since).not.toBeNull())
     clock = new Date(clock.getTime() + 3 * 60_000) // A's window expires
-    const depsB: AttemptDeps = { registry, now: () => clock, runService: () => new Promise((resolve) => { releaseB = () => resolve({ text: 'B reply' }) }) }
+    const depsB: AttemptDeps = { registry, now: () => clock, runService: () => replyB.promise }
     const b = performAction(t.db, who, depsB, attemptId, { kind: 'send', text: 'B' })
     await vi.waitFor(async () => {
       const row = await t.db.selectFrom('attempts').select('pending_action').where('id', '=', attemptId).executeTakeFirstOrThrow()
       expect(JSON.stringify(row.pending_action)).toContain('B')
     })
-    releaseA(new Error('A failed late'))
+    replyA.reject(new Error('A failed late'))
     expect(await a).toMatchObject({ ok: false })
     // B is still parked: a third action must be refused while B runs.
     expect(await performAction(t.db, who, { registry, now: () => clock, runService: runner() }, attemptId, { kind: 'send', text: 'C' })).toMatchObject({ ok: false, error: { code: 'busy' } })
-    releaseB()
+    replyB.resolve({ text: 'B reply' })
     expect(await b).toMatchObject({ ok: true, snapshot: { view: { transcript: [{ content: 'B' }, { content: 'B reply' }] } } })
   })
 
@@ -139,18 +153,18 @@ describe('stale calls never touch a newer action (review H1, H2)', () => {
     const who = await createUser(t.db, s.site.id, 'learner', 'stale-ok')
     const { attemptId } = await startOrResume(t.db, who, { registry }, challengeId)
     let clock = new Date('2026-10-08T10:00:00Z')
-    let releaseA: () => void = () => undefined
-    const depsA: AttemptDeps = { registry, now: () => clock, runService: () => new Promise((resolve) => { releaseA = () => resolve({ text: 'A reply' }) }) }
+    const replyA = deferred()
+    const depsA: AttemptDeps = { registry, now: () => clock, runService: () => replyA.promise }
     const a = performAction(t.db, who, depsA, attemptId, { kind: 'send', text: 'A' })
     await vi.waitFor(async () => expect((await t.db.selectFrom('attempts').select('pending_since').where('id', '=', attemptId).executeTakeFirstOrThrow()).pending_since).not.toBeNull())
     clock = new Date(clock.getTime() + 3 * 60_000)
-    let releaseB: () => void = () => undefined
-    const depsB: AttemptDeps = { registry, now: () => clock, runService: () => new Promise((resolve) => { releaseB = () => resolve({ text: 'B reply' }) }) }
+    const replyB = deferred()
+    const depsB: AttemptDeps = { registry, now: () => clock, runService: () => replyB.promise }
     const b = performAction(t.db, who, depsB, attemptId, { kind: 'send', text: 'B' })
     await vi.waitFor(async () => expect(JSON.stringify((await t.db.selectFrom('attempts').select('pending_action').where('id', '=', attemptId).executeTakeFirstOrThrow()).pending_action)).toContain('B'))
-    releaseA()
+    replyA.resolve({ text: 'A reply' })
     expect(await a).toMatchObject({ ok: false, error: { code: 'busy' } })
-    releaseB()
+    replyB.resolve({ text: 'B reply' })
     const done = await b
     expect(done).toMatchObject({ ok: true, snapshot: { view: { transcript: [{ content: 'B' }, { content: 'B reply' }] } } })
   })

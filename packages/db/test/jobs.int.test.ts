@@ -120,8 +120,13 @@ describe('job robustness (review H3, M1)', () => {
 
   it('a worker whose lease was taken over cannot write its stale progress', async () => {
     let clock = new Date('2026-10-08T10:00:00Z')
+    // Created before the slice starts, so releasing it can never race the slice beginning.
     let release: () => void = () => undefined
-    const slow: JobSliceRunner = () => new Promise((resolve) => { release = () => resolve({ done: false, progress: { done: 1, from: 'stale' } }) })
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const slow: JobSliceRunner = async () => {
+      await gate
+      return { done: false, progress: { done: 1, from: 'stale' } }
+    }
     const deps: AttemptDeps = { registry, now: () => clock, runJobSlice: slow }
     const { jobId } = await queued('lease', deps)
     const first = advanceJob(t.db, deps, jobId)
