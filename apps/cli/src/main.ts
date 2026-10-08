@@ -9,9 +9,12 @@
  *   challengeforge create-admin            create (or promote) the site's administrator
  *   challengeforge reset-password          set a new password (from NEW_PASSWORD) and sign the person out
  *   challengeforge run-jobs                advance background jobs (run from cron every few minutes)
+ *   challengeforge export-pack <slug> <dir> write a pack (latest versions + assets) to a directory
  */
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { Command } from 'commander'
-import { advanceJob, createDb, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
+import { advanceJob, createDb, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
 import { createServiceRunners, servicesConfigFromEnv } from '@challengeforge/services'
 import { registry } from '@challengeforge/types'
 import { loadConfig } from './config'
@@ -124,6 +127,26 @@ program
         }
       }
       process.stdout.write(`Advanced ${slices} job slices.\n`)
+    }),
+  )
+
+program
+  .command('export-pack')
+  .argument('<slug>', 'pack slug, e.g. clinical-ai')
+  .argument('<dir>', 'an empty or new directory to write the pack to')
+  .description('Export a pack (latest version of each challenge, sections, assets) for import elsewhere')
+  .action((slug: string, dir: string) =>
+    withDb(async (db, config) => {
+      const site = await ensureSite(db, config.siteSlug, config.siteName)
+      const files = exportFiles(await exportPack(db, systemScope(site.id), slug))
+      const root = path.resolve(dir)
+      if (existsSync(root) && readdirSync(root).length > 0) throw new Error(`${dir} is not empty; choose a new directory.`)
+      for (const file of files) {
+        const target = path.join(root, file.path)
+        mkdirSync(path.dirname(target), { recursive: true })
+        writeFileSync(target, file.contents)
+      }
+      process.stdout.write(`Exported ${files.length} files to ${root}\n`)
     }),
   )
 
