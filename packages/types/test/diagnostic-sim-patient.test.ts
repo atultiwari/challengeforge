@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyServiceResult, startAttempt, type ServiceRequest } from '@challengeforge/engine'
+import { applyServiceResult, replay, startAttempt, type ServiceRequest } from '@challengeforge/engine'
 import { diagnosticSim, type DiagnosticSimDef, type DiagnosticSimView } from '../src/diagnostic-sim'
 import caseJson from '../fixtures/diagnostic-sim/dka-young-adult.json'
 
@@ -50,5 +50,24 @@ describe('diagnostic-sim: talking to the patient', () => {
     expect(diagnosticSim.prepare!(chatty, attempt.state, { kind: 'converse', text: 'one more?' }, ctx)).toBeNull()
     const capped = await applyServiceResult(diagnosticSim, chatty, attempt, { kind: 'converse', text: 'one more?' }, env, { reply: 'x', matched: [] })
     expect(capped).toMatchObject({ ok: false })
+  })
+
+  it('records the reply on the event, so the attempt replays without the model (review)', async () => {
+    const { attempt } = startAttempt(diagnosticSim, chatty, ctx)
+    const r = await applyServiceResult(diagnosticSim, chatty, attempt, { kind: 'converse', text: 'When did this start?' }, env, { reply: 'Two days ago.', matched: ['h_onset'] })
+    if (!r.ok) throw new Error(r.error.message)
+    expect(r.event.effects).toEqual({ reply: 'Two days ago.', matched: ['h_onset'] })
+    expect(await replay(diagnosticSim, chatty, ctx, [r.event], {})).toMatchObject({ ok: true, attempt: { state: r.attempt.state } })
+  })
+
+  it('says the cap is reached (not "try again") once questions run out', async () => {
+    let { attempt } = startAttempt(diagnosticSim, chatty, ctx)
+    for (const text of ['one?', 'two?']) {
+      const r = await applyServiceResult(diagnosticSim, chatty, attempt, { kind: 'converse', text }, env, { reply: 'x', matched: [] })
+      if (!r.ok) throw new Error(r.error.message)
+      attempt = r.attempt
+    }
+    const capped = await applyServiceResult(diagnosticSim, chatty, attempt, { kind: 'converse', text: 'three?' }, env, { reply: 'x', matched: [] })
+    expect(capped).toMatchObject({ ok: false, error: { typeCode: 'cap_reached' } })
   })
 })

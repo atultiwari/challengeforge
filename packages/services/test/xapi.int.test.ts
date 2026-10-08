@@ -19,6 +19,8 @@ const quiz = {
 let t: TestDb
 let s: Awaited<ReturnType<typeof setupSite>>
 let challengeId: string
+/** Past the push's lag window, so just-created facts are due. */
+const later = () => new Date(Date.now() + 120_000)
 beforeAll(async () => {
   t = await freshDb()
   s = await setupSite(t.db)
@@ -56,22 +58,43 @@ describe('xAPI', () => {
       received.push({ url, headers: init.headers, statements: JSON.parse(init.body) as Statement[] })
       return { ok: true, status: 200, json: async () => [] }
     }
-    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: lrs })).toEqual({ sent: 2, failed: 0 })
+    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: lrs, now: later() })).toEqual({ sent: 2, failed: 0 })
     expect(received[0]!.url).toBe('https://lrs.example.test/xapi/statements')
     expect(received[0]!.headers['x-experience-api-version']).toBe('1.0.3')
     expect(received[0]!.headers['authorization']).toBe(`Basic ${Buffer.from('key-1:lrs-secret').toString('base64')}`)
-    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: lrs })).toEqual({ sent: 0, failed: 0 })
+    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: lrs, now: later() })).toEqual({ sent: 0, failed: 0 })
 
     const { attemptId } = await startOrResume(t.db, s.otherLearner, { registry }, challengeId)
     await performAction(t.db, s.otherLearner, { registry }, attemptId, { kind: 'submit', payload: { answer: 'b' } })
     const down: FetchLike = async () => ({ ok: false, status: 503, json: async () => ({}) })
-    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: down })).toEqual({ sent: 0, failed: 1 })
+    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: down, now: later() })).toEqual({ sent: 0, failed: 1 })
     expect((await getLrsEndpoint(t.db, s.admin))?.lastError).toBe('The LRS answered HTTP 503.')
-    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: lrs })).toEqual({ sent: 2, failed: 0 })
+    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: lrs, now: later() })).toEqual({ sent: 2, failed: 0 })
     expect(received.at(-1)!.statements.every((st) => st.actor.account.name === s.otherLearner.principal!.userId)).toBe(true)
   })
 
   it('refuses an LRS on an unsafe address', async () => {
     await expect(saveLrsEndpoint(t.db, s.admin, { endpoint: 'http://lrs.example.test/', username: 'k', secretSealed: 'x' })).rejects.toMatchObject({ code: 'invalid' })
+  })
+
+  it('one statement the LRS refuses is skipped, not retried forever (review)', async () => {
+    const { attemptId } = await startOrResume(t.db, s.author, { registry }, challengeId)
+    await performAction(t.db, s.author, { registry }, attemptId, { kind: 'submit', payload: { answer: 'b' } })
+    const picky: FetchLike = async (_url, init) => {
+      const batch = JSON.parse(init.body) as Statement[]
+      const bad = batch.some((st) => st.verb.id.endsWith('/attempted'))
+      return { ok: !bad, status: bad ? 400 : 200, json: async () => [] }
+    }
+    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: picky, now: later() })).toEqual({ sent: 1, failed: 0 })
+    expect((await getLrsEndpoint(t.db, s.admin))?.lastError).toMatch(/refused 1 statement/)
+    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: picky, now: later() })).toEqual({ sent: 0, failed: 0 })
+  })
+
+  it('facts younger than the lag window wait for the next run', async () => {
+    const { attemptId } = await startOrResume(t.db, s.anonymous.principal ? s.anonymous : s.otherAuthor, { registry }, challengeId)
+    void attemptId
+    const lrs: FetchLike = async () => ({ ok: true, status: 200, json: async () => [] })
+    expect(await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: lrs, now: new Date() })).toEqual({ sent: 0, failed: 0 })
+    expect((await pushToLrs(t.db, SECRET, 'https://site.test', { fetchImpl: lrs, now: later() })).sent).toBe(1)
   })
 })

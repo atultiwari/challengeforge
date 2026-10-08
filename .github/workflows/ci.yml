@@ -47,7 +47,12 @@ jobs:
           TEST_DB_URL: mysql://root:ciroot@127.0.0.1:3306
 
   e2e:
+    # Sharded: one long-lived dev server compiling every route ran the runner out of memory (jobs were killed mid-run).
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/3', '2/3', '3/3']
     services:
       db:
         # The engine Hostinger runs in production.
@@ -65,7 +70,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @challengeforge/web exec playwright install --with-deps chromium
-      - run: pnpm --filter @challengeforge/web test:e2e
+      - run: pnpm --filter @challengeforge/web exec tsx e2e/prepare-db.ts && pnpm --filter @challengeforge/web exec playwright test --shard=${{ matrix.shard }}
+        env:
+          TEST_DB_URL: mysql://root:ciroot@127.0.0.1:3306
+          CI: 'true'
+      # The fresh-install (setup wizard) journey runs once, on its own empty database.
+      - if: matrix.shard == '3/3'
+        run: pnpm --filter @challengeforge/web exec tsx e2e-setup/prepare-db.ts && pnpm --filter @challengeforge/web exec playwright test -c playwright.setup.config.ts
         env:
           TEST_DB_URL: mysql://root:ciroot@127.0.0.1:3306
           CI: 'true'

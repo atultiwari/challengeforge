@@ -1,4 +1,4 @@
-import { importPack, ValidationError } from '@challengeforge/db'
+import { importPack, requireRole, ValidationError } from '@challengeforge/db'
 import { downloadRegistryPack, PackZipError } from '@challengeforge/services'
 import { registry } from '@challengeforge/types'
 import { db } from '@/server/db'
@@ -10,6 +10,8 @@ import { mutation } from '@/server/route'
 /** Installs a registry pack by slug. The URL and checksum come from the registry index, never from the browser. */
 export async function POST(request: Request) {
   return mutation(request, async ({ scope, body }) => {
+    // Admins only, checked BEFORE downloading anything.
+    requireRole(scope, 'admin')
     const slug = text(body, 'slug', 63)
     const { packs, error } = await registryPacks()
     if (error) return fail(502, 'registry_unreachable', error)

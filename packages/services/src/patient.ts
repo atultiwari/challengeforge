@@ -14,11 +14,11 @@ import { z } from 'zod'
 export const PatientPayload = z.object({
   provider: z.string().min(1),
   model: z.string().min(1),
-  callCap: z.number().int().positive().max(100),
+  callCap: z.number().int().positive().max(1000),
   persona: z.string().max(1000),
   patient: z.object({ age: z.number(), sex: z.string(), chief_complaint: z.string() }).passthrough(),
   items: z.array(z.object({ id: z.string(), label: z.string(), response: z.string(), keywords: z.array(z.string()) })).max(300),
-  recent: z.array(z.object({ question: z.string(), reply: z.string() })).max(10),
+  recent: z.array(z.object({ question: z.string(), reply: z.string(), matched: z.array(z.string()).max(20).default([]) })).max(10),
   question: z.string().min(1).max(300),
 })
 export type PatientPayload = z.infer<typeof PatientPayload>
@@ -40,17 +40,38 @@ export function patientSystemPrompt(p: PatientPayload): string {
 }
 
 const ModelAnswer = z.object({ reply: z.string().min(1).max(1500), matched: z.array(z.string()).max(20) })
+/** At most this many facts per question: "tell me everything" is not one question. */
+export const MAX_MATCHED = 3
 
-/** Grounds a model's raw answer: valid JSON keeps its reply and known ids; anything else falls back to the catalogue search. */
+const STOPWORDS = new Set(['what', 'when', 'where', 'which', 'have', 'your', 'this', 'that', 'with', 'been', 'does', 'about', 'there', 'they', 'them', 'from', 'were', 'would', 'could', 'should', 'tell', 'please', 'anything', 'everything', 'ever', 'other', 'into', 'just', 'like', 'some', 'more', 'than', 'very', 'much', 'many', 'last', 'also'])
+const contentWords = (text: string): string[] => normaliseTerm(text).split(' ').filter((w) => w.length >= 4 && !STOPWORDS.has(w))
+
+/** Does the question share a real word (by its first five letters) with this fact's label or keywords? */
+export function questionTouches(item: { label: string; keywords: readonly string[] }, question: string): boolean {
+  const stems = new Set(contentWords(question).map((w) => w.slice(0, 5)))
+  return [item.label, ...item.keywords].flatMap(contentWords).some((w) => stems.has(w.slice(0, 5)))
+}
+
+/**
+ * Grounds a model's raw answer. The model's choice of facts is trusted only
+ * if it is small (at most MAX_MATCHED), names real facts, and each fact is
+ * about something the question actually mentions. Otherwise (a prompt
+ * injection asking for "every fact", a malformed reply, or the development
+ * mock) the deterministic keyword match decides, reply included.
+ */
 export function groundPatientAnswer(p: PatientPayload, raw: string): { reply: string; matched: string[] } {
-  const known = new Set(p.items.map((i) => i.id))
+  const byId = new Map(p.items.map((i) => [i.id, i]))
   const json = /\{[\s\S]*\}/.exec(raw)?.[0]
   if (json) {
     try {
       const parsed = ModelAnswer.safeParse(JSON.parse(json))
-      if (parsed.success) return { reply: parsed.data.reply.trim(), matched: [...new Set(parsed.data.matched.filter((id) => known.has(id)))] }
+      if (parsed.success) {
+        const ids = [...new Set(parsed.data.matched)]
+        const trustworthy = ids.length <= MAX_MATCHED && ids.every((id) => byId.has(id) && questionTouches(byId.get(id)!, p.question))
+        if (trustworthy) return { reply: parsed.data.reply.trim(), matched: ids }
+      }
     } catch {
-      // fall through to the catalogue search
+      // fall through to the catalogue match
     }
   }
   const hits = keywordMatches(p.items, p.question)
@@ -72,6 +93,6 @@ export function keywordMatches<T extends { id: string; label: string; keywords: 
     .map((item) => ({ item, score: item.keywords.filter(has).length + (has(item.label) ? 1 : 0) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
+    .slice(0, MAX_MATCHED)
     .map((x) => x.item)
 }

@@ -34,6 +34,8 @@ export interface FactFilter {
   /** Composite cursors: only facts strictly after (at, id). */
   attemptsAfter?: { at: Date; id: string } | null
   resultsAfter?: { at: Date; id: string } | null
+  /** Only facts strictly before this time (a lag, so rows committed a little late are not skipped). */
+  before?: Date
   limit: number
 }
 
@@ -58,6 +60,7 @@ export async function learningFacts(db: Db, siteId: string, filter: FactFilter):
   const attempts = await base()
     .select(['attempts.id as attemptId', 'attempts.user_id as userId', 'challenges.id as challengeId', 'challenges.title as challengeTitle', 'packs.slug as packSlug', 'attempts.started_at as at'])
     .where(after(filter.attemptsAfter, 'attempts.started_at'))
+    .$if(filter.before !== undefined, (q) => q.where('attempts.started_at', '<', filter.before!))
     .orderBy('attempts.started_at')
     .orderBy('attempts.id')
     .limit(limit)
@@ -77,6 +80,7 @@ export async function learningFacts(db: Db, siteId: string, filter: FactFilter):
     ])
     .where('assessments.status', 'in', ['auto', 'overridden'])
     .where(after(filter.resultsAfter, 'assessments.updated_at'))
+    .$if(filter.before !== undefined, (q) => q.where('assessments.updated_at', '<', filter.before!))
     .orderBy('assessments.updated_at')
     .orderBy('attempts.id')
     .limit(limit)

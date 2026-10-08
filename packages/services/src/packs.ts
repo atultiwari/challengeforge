@@ -46,6 +46,7 @@ export function unzipLimited(data: Uint8Array, limits: ZipLimits = PACK_ZIP_LIMI
   const files = new Map<string, Uint8Array>()
   let entries = 0
   let total = 0
+  const seen = new Set<string>()
   let failure: Error | null = null
   const unzip = new Unzip((file) => {
     if (failure) return
@@ -55,6 +56,12 @@ export function unzipLimited(data: Uint8Array, limits: ZipLimits = PACK_ZIP_LIMI
     if (entries > limits.maxEntries) failure = new PackZipError(`The zip has more than ${limits.maxEntries} files.`)
     else if (!name) failure = new PackZipError(`The zip contains an unsafe path: ${file.name.slice(0, 80)}`)
     if (failure || !name) return
+    // The same name twice: the second would silently replace the first.
+    if (seen.has(name)) {
+      failure = new PackZipError(`The zip contains ${name.slice(0, 80)} twice.`)
+      return
+    }
+    seen.add(name)
     const chunks: Uint8Array[] = []
     let size = 0
     file.ondata = (err, chunk, final) => {

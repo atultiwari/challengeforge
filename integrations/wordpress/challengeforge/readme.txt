@@ -14,8 +14,9 @@ Add `[challengeforge challenge="<challenge id>" label="Start"]` to any page or p
 * Signed-in members, when single sign-on is set up, arrive signed in to
   ChallengeForge as their own account there. That account is linked by
   WordPress user id, never by email. The sign-in uses a two-minute,
-  single-use token signed with a secret only the two sites share, and it
-  is sent as a form POST, so it never appears in a URL.
+  single-use token signed with a secret only the two sites share. The token
+  is created only when the member clicks, so cached pages never hold one,
+  and it is sent as a form POST, so it never appears in a URL.
 
 == Installation ==
 

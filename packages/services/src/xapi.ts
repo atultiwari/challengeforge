@@ -11,6 +11,7 @@
 import { createHash } from 'node:crypto'
 import { enabledLrsEndpoints, learningFacts, recordLrsProgress, siteBaseUrl, type Db, type LearningFact } from '@challengeforge/db'
 import { open } from './lti/keys'
+import { assertPublicDestination } from './outbound'
 import { OUTBOUND_TIMEOUT_MS, type FetchLike } from './payments/types'
 
 const VERBS = {
@@ -59,6 +60,30 @@ export function statementFor(fact: LearningFact, baseUrl: string): Statement {
 }
 
 const BATCH = 200
+/** Facts younger than this wait for the next run: a transaction may commit a little after the time it recorded. */
+const LAG_MS = 60_000
+
+type Post = (statements: readonly Statement[]) => Promise<{ ok: boolean; status: number }>
+
+/**
+ * Sends a batch. If the LRS refuses the batch as invalid (400), each
+ * statement is sent on its own, so one bad statement cannot block the
+ * stream forever: the ones still refused are skipped and reported.
+ */
+async function postBatch(post: Post, statements: readonly Statement[]): Promise<{ sent: number; refused: number }> {
+  const res = await post(statements)
+  if (res.ok) return { sent: statements.length, refused: 0 }
+  if (res.status !== 400 || statements.length === 1) throw new Error(`The LRS answered HTTP ${res.status}.`)
+  let sent = 0
+  let refused = 0
+  for (const st of statements) {
+    const one = await post([st])
+    if (one.ok) sent += 1
+    else if (one.status === 400) refused += 1
+    else throw new Error(`The LRS answered HTTP ${one.status}.`)
+  }
+  return { sent, refused }
+}
 
 /**
  * Sends new statements to every enabled LRS, a batch per stream per run, and
@@ -67,26 +92,34 @@ const BATCH = 200
 export async function pushToLrs(db: Db, secret: string, appUrl: string, options: { fetchImpl?: FetchLike; now?: Date } = {}): Promise<{ sent: number; failed: number }> {
   const fetchImpl = options.fetchImpl ?? (fetch as unknown as FetchLike)
   const counts = { sent: 0, failed: 0 }
-  for (const lrs of await enabledLrsEndpoints(db)) {
+  let endpoints: Awaited<ReturnType<typeof enabledLrsEndpoints>>
+  try {
+    endpoints = await enabledLrsEndpoints(db)
+  } catch {
+    return counts
+  }
+  for (const lrs of endpoints) {
     try {
+      if (!options.fetchImpl) await assertPublicDestination(lrs.endpoint)
       const baseUrl = await siteBaseUrl(db, lrs.siteId, appUrl)
-      const { attempts, results } = await learningFacts(db, lrs.siteId, { attemptsAfter: lrs.attemptsAfter, resultsAfter: lrs.resultsAfter, limit: BATCH })
+      const before = new Date((options.now ?? new Date()).getTime() - LAG_MS)
+      const { attempts, results } = await learningFacts(db, lrs.siteId, { attemptsAfter: lrs.attemptsAfter, resultsAfter: lrs.resultsAfter, before, limit: BATCH })
       if (attempts.length + results.length === 0) continue
       const statements = [...attempts, ...results].map((f) => statementFor(f, baseUrl))
-      const res = await fetchImpl(`${lrs.endpoint}statements`, {
-        method: 'POST',
-        headers: {
-          authorization: `Basic ${Buffer.from(`${lrs.username}:${open(lrs.secretSealed, secret)}`).toString('base64')}`,
-          'content-type': 'application/json',
-          'x-experience-api-version': '1.0.3',
-        },
-        body: JSON.stringify(statements),
-        signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
-      })
-      if (!res.ok) throw new Error(`The LRS answered HTTP ${res.status}.`)
+      const auth = `Basic ${Buffer.from(`${lrs.username}:${open(lrs.secretSealed, secret)}`).toString('base64')}`
+      const post: Post = (batch) =>
+        fetchImpl(`${lrs.endpoint}statements`, {
+          method: 'POST',
+          headers: { authorization: auth, 'content-type': 'application/json', 'x-experience-api-version': '1.0.3' },
+          body: JSON.stringify(batch),
+          signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+          redirect: 'error',
+        })
+      const outcome = await postBatch(post, statements)
       const last = (list: LearningFact[]) => (list.length > 0 ? { at: list[list.length - 1]!.at, id: list[list.length - 1]!.attemptId } : null)
-      await recordLrsProgress(db, lrs.siteId, { attemptsAfter: last(attempts), resultsAfter: last(results), error: null }, options.now)
-      counts.sent += statements.length
+      const error = outcome.refused > 0 ? `The LRS refused ${outcome.refused} statement(s) as invalid; they were skipped.` : null
+      await recordLrsProgress(db, lrs.siteId, { attemptsAfter: last(attempts), resultsAfter: last(results), error }, options.now)
+      counts.sent += outcome.sent
     } catch (err) {
       counts.failed += 1
       await recordLrsProgress(db, lrs.siteId, { error: err instanceof Error ? err.message : 'Unknown error' }, options.now).catch(() => undefined)

@@ -152,10 +152,10 @@ async function importChallenge(
     return { challengeId, outcome: 'created' }
   }
   if (existing.pack_id !== null && existing.pack_id !== target.packId) {
-    throw new Error(`Challenge ${entry.slug} belongs to another pack; rename it in this pack.`)
+    throw new ValidationError(`Challenge ${entry.slug} belongs to another pack; rename it in this pack.`)
   }
   if (existing.type_id !== typeId || existing.type_version !== typeVersion) {
-    throw new Error(`Challenge ${entry.slug} already exists as ${existing.type_id}@${existing.type_version}; a pack cannot change its type.`)
+    throw new ValidationError(`Challenge ${entry.slug} already exists as ${existing.type_id}@${existing.type_version}; a pack cannot change its type.`)
   }
   if (existing.status === 'archived') return { challengeId: existing.id, outcome: 'skipped' }
   await db

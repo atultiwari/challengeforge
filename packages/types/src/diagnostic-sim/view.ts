@@ -76,7 +76,7 @@ export function viewOf(def: DiagnosticSimDef, s: DiagnosticSimState): Diagnostic
     differential: s.differential === null ? null : [...s.differential],
     differentialRequired: def.gates.differential_before_investigations,
     ...(def.patient_chat.enabled
-      ? { patientChat: { conversation: [...(s.conversation ?? [])], remaining: Math.max(0, def.patient_chat.max_questions - (s.conversation ?? []).length) } }
+      ? { patientChat: { conversation: (s.conversation ?? []).map((t) => ({ question: t.question, reply: t.reply })), remaining: Math.max(0, def.patient_chat.max_questions - (s.conversation ?? []).length) } }
       : {}),
     ended: s.ended,
   }

@@ -10,6 +10,7 @@
 import { z } from 'zod'
 import { isAllowedOutboundUrl, type LoadedPack } from '@challengeforge/db'
 import { OUTBOUND_TIMEOUT_MS } from './payments/types'
+import { assertPublicDestination } from './outbound'
 import { loadPackFromZip, MAX_PACK_ZIP_BYTES, PackZipError, sha256Hex } from './packs'
 
 const MAX_INDEX_BYTES = 1024 * 1024
@@ -27,8 +28,15 @@ export type RegistryEntry = z.infer<typeof RegistryEntrySchema>
 const IndexSchema = z.object({ format: z.literal(1), packs: z.array(RegistryEntrySchema).max(500) })
 
 /** Fetches a URL's body, refusing unsafe addresses and anything over `maxBytes` (counted while reading). */
-async function fetchCapped(url: string, maxBytes: number, fetchImpl: typeof fetch): Promise<Uint8Array> {
+async function fetchCapped(url: string, maxBytes: number, fetchImpl: typeof fetch, checkDns: boolean): Promise<Uint8Array> {
   if (!isAllowedOutboundUrl(url)) throw new PackZipError('That address is not allowed (https on the public internet only).')
+  if (checkDns) {
+    try {
+      await assertPublicDestination(url)
+    } catch (err) {
+      throw new PackZipError(err instanceof Error ? err.message : 'That address is not allowed.')
+    }
+  }
   const res = await fetchImpl(url, { signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS * 4), redirect: 'error' })
   if (!res.ok || !res.body) throw new PackZipError(`The registry answered HTTP ${res.status}.`)
   if (Number(res.headers.get('content-length') ?? 0) > maxBytes) throw new PackZipError('The download is larger than this site accepts.')
@@ -48,8 +56,8 @@ async function fetchCapped(url: string, maxBytes: number, fetchImpl: typeof fetc
   return Buffer.concat(chunks)
 }
 
-export async function fetchRegistryIndex(indexUrl: string, fetchImpl: typeof fetch = fetch): Promise<RegistryEntry[]> {
-  const body = await fetchCapped(indexUrl, MAX_INDEX_BYTES, fetchImpl)
+export async function fetchRegistryIndex(indexUrl: string, fetchImpl?: typeof fetch): Promise<RegistryEntry[]> {
+  const body = await fetchCapped(indexUrl, MAX_INDEX_BYTES, fetchImpl ?? fetch, fetchImpl === undefined)
   let json: unknown
   try {
     json = JSON.parse(Buffer.from(body).toString('utf8'))
@@ -62,8 +70,8 @@ export async function fetchRegistryIndex(indexUrl: string, fetchImpl: typeof fet
 }
 
 /** Downloads a registry pack and checks it against the index's sha256 before reading it. */
-export async function downloadRegistryPack(entry: RegistryEntry, fetchImpl: typeof fetch = fetch): Promise<LoadedPack> {
-  const bytes = await fetchCapped(entry.url, MAX_PACK_ZIP_BYTES, fetchImpl)
+export async function downloadRegistryPack(entry: RegistryEntry, fetchImpl?: typeof fetch): Promise<LoadedPack> {
+  const bytes = await fetchCapped(entry.url, MAX_PACK_ZIP_BYTES, fetchImpl ?? fetch, fetchImpl === undefined)
   if (sha256Hex(bytes) !== entry.sha256) throw new PackZipError('The download does not match the registry checksum, so it was not installed.')
   return loadPackFromZip(bytes)
 }

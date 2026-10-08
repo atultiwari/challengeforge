@@ -4,6 +4,7 @@ import { registry } from '@challengeforge/types'
 import { db } from '@/server/db'
 import { fail, ok, readBytesCapped, sameOrigin, toResponse } from '@/server/http'
 import { currentScope } from '@/server/scope'
+import { withinLimit } from '@/server/limits'
 
 /** An admin uploads a pack .zip; it is validated in full by the same importer the CLI uses. */
 export async function POST(request: Request) {
@@ -11,6 +12,7 @@ export async function POST(request: Request) {
   try {
     const { scope } = await currentScope()
     requireRole(scope, 'admin')
+    if (!withinLimit('author', scope, request)) return fail(429, 'rate_limited', 'Too many requests. Wait a minute and try again.')
     const raw = await readBytesCapped(request, MAX_PACK_ZIP_BYTES + 64 * 1024)
     if (raw === null) return fail(413, 'too_large', 'The pack is larger than 32 MB.')
     const form = await new Response(new Uint8Array(raw), { headers: { 'content-type': request.headers.get('content-type') ?? '' } }).formData()

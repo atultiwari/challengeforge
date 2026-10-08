@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto'
 import { SignJWT } from 'jose'
 import { claimLtiScore, dueLtiScores, getPlatform, markLtiScoreFailed, markLtiScoreSent, type Db, type DueScore, type LtiPlatform } from '@challengeforge/db'
 import { OUTBOUND_TIMEOUT_MS, type FetchLike } from '../payments/types'
+import { assertPublicDestination } from '../outbound'
 import { AGS_SCORE_SCOPE } from './claims'
 import { ensureToolKey, LTI_ALG } from './keys'
 
@@ -37,6 +38,7 @@ export async function fetchAccessToken(platform: LtiPlatform, key: Awaited<Retur
       scope: AGS_SCORE_SCOPE,
     }).toString(),
     signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+    redirect: 'error',
   })
   const json = (await res.json().catch(() => ({}))) as { access_token?: unknown; expires_in?: unknown }
   if (!res.ok || typeof json.access_token !== 'string') throw new Error(`Token request refused (HTTP ${res.status}).`)
@@ -64,6 +66,7 @@ async function postScore(score: DueScore, token: string, fetchImpl: FetchLike, n
       timestamp: now.toISOString(),
     }),
     signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+    redirect: 'error',
   })
   if (!res.ok) throw new Error(`Score refused (HTTP ${res.status}).`)
 }
@@ -86,6 +89,7 @@ export async function sendDueLtiScores(db: Db, secret: string, options: { fetchI
         token = await fetchAccessToken(platform, await ensureToolKey(db, score.siteId, secret), fetchImpl, now)
         tokens.set(platform.id, token)
       }
+      if (!options.fetchImpl) await assertPublicDestination(score.lineitemUrl)
       await postScore(score, token.token, fetchImpl, now)
       await markLtiScoreSent(db, score)
       sent += 1

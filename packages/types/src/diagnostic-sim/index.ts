@@ -29,20 +29,27 @@ export const diagnosticSim: ChallengeType<DiagnosticSimDef, DiagnosticSimState, 
       payload: {
         provider: def.patient_chat.model.provider,
         model: def.patient_chat.model.model,
-        callCap: def.patient_chat.max_questions,
+        // The gateway counts per learner and challenge across attempts; the per-attempt limit is enforced above.
+        callCap: Math.min(def.patient_chat.max_questions * 10, 1000),
         persona: def.patient_chat.persona,
         patient: { ...def.presentation.patient, chief_complaint: def.presentation.chief_complaint },
         items: def.history.map((h) => ({ id: h.id, label: h.label, response: h.response, keywords: [...h.keywords] })),
-        recent: (state.conversation ?? []).slice(-6),
+        recent: (state.conversation ?? []).slice(-6).map((t) => ({ question: t.question, reply: t.reply, matched: [...(t.matched ?? [])] })),
         question: action.text,
       },
     }
   },
   step: async (def, state, action, env) => {
     if (action.kind !== 'converse') return stepState(def, state, action)
+    if (!def.patient_chat.enabled) return { ok: false, error: { code: 'not_enabled', message: 'This case does not include talking to the patient.' } }
+    if ((state.conversation ?? []).length >= def.patient_chat.max_questions) {
+      return { ok: false, error: { code: 'cap_reached', message: `You have asked the patient ${def.patient_chat.max_questions} questions.` } }
+    }
     const answer = PatientReplySchema.safeParse(env.recorded)
     if (!answer.success) return stepState(def, state, action)
-    return conversePatient(def, state, action.text, answer.data)
+    const outcome = conversePatient(def, state, action.text, answer.data)
+    // Recorded on the event, so the attempt replays (and re-grades) without calling the model again.
+    return outcome.ok ? { ...outcome, effects: answer.data } : outcome
   },
   view: viewOf,
   isTerminal: (_def, state) => state.ended,

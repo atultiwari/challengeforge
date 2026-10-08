@@ -30,10 +30,19 @@ const MAX_DEPLOYMENTS = 20
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
 
-/** Private, loopback and link-local IP literals: an outbound call there would probe the server's own network. */
-function isPrivateAddress(host: string): boolean {
-  const h = host.replace(/^\[|\]$/g, '').toLowerCase()
-  if (h === '::1' || h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true
+/** Private, loopback, link-local and other non-public IP addresses: an outbound call there would probe the server's own network. */
+export function isPrivateAddress(host: string): boolean {
+  let h = host.replace(/^\[|\]$/g, '').toLowerCase()
+  // IPv4 written inside IPv6 (::ffff:10.0.0.1) is still that IPv4 address.
+  const mapped = /^(?:0*:)*:?ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(h)
+  if (mapped) h = mapped[1]!
+  // ...also in the hex form URL parsing produces (::ffff:7f00:1).
+  const mappedHex = /^(?:0*:)*:?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(h)
+  if (mappedHex) {
+    const [hi, lo] = [Number.parseInt(mappedHex[1]!, 16), Number.parseInt(mappedHex[2]!, 16)]
+    h = `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`
+  }
+  if (h === '::' || h === '::1' || /^fe[89ab]/.test(h) || /^fe[c-f]/.test(h) || h.startsWith('fc') || h.startsWith('fd')) return true
   const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h)
   if (!m) return false
   const [a, b] = [Number(m[1]), Number(m[2])]

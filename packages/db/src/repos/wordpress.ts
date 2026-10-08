@@ -26,6 +26,9 @@ export async function saveWpConnection(db: Db, scope: Scope, wpUrl: string, secr
   if (!isAllowedOutboundUrl(url)) throw new ValidationError('Enter the WordPress site address, e.g. https://blog.example.org.')
   const now = new Date()
   await transact(db, async (trx) => {
+    const previous = await trx.selectFrom('wp_connections').select('wp_url').where('site_id', '=', scope.siteId).forUpdate().executeTakeFirst()
+    // A different WordPress site has different users: its user 1 is not the old site's user 1.
+    if (previous && previous.wp_url !== url) await trx.deleteFrom('wp_users').where('site_id', '=', scope.siteId).execute()
     await trx
       .insertInto('wp_connections')
       .values({ site_id: scope.siteId, wp_url: url, secret_sealed: secretSealed, enabled: true, created_at: now, updated_at: now })
@@ -65,10 +68,8 @@ export async function linkWpUser(db: Db, siteId: string, wpUserId: string, name:
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(wpUserId)) throw new ValidationError('The WordPress sign-on has no usable user id.')
   const find = () => db.selectFrom('wp_users').select('user_id').where('site_id', '=', siteId).where('wp_user_id', '=', wpUserId).executeTakeFirst()
   const existing = await find()
-  if (existing) {
-    await db.insertInto('memberships').values({ site_id: siteId, user_id: existing.user_id, role: 'learner', created_at: now }).ignore().execute()
-    return existing.user_id
-  }
+  // Linked before: their membership is whatever an admin made it (removing them is not undone by signing in again).
+  if (existing) return existing.user_id
   const userId = newId()
   const handle = createHash('sha256').update(`${siteId}:${wpUserId}`).digest('hex').slice(0, 24)
   try {
@@ -88,8 +89,11 @@ export async function linkWpUser(db: Db, siteId: string, wpUserId: string, name:
   }
 }
 
+/** Spent ids are kept well past expiry (the verifier allows a minute of clock skew), so purging can never reopen a replay. */
+const JTI_KEEP_MS = 10 * 60_000
+
 /** Removes spent sign-on token ids once they could no longer be used anyway. */
 export async function purgeSsoJtis(db: Db, now: Date = new Date()): Promise<number> {
-  const result = await db.deleteFrom('sso_jtis').where('expires_at', '<', now).executeTakeFirst()
+  const result = await db.deleteFrom('sso_jtis').where('expires_at', '<', new Date(now.getTime() - JTI_KEEP_MS)).executeTakeFirst()
   return Number(result.numDeletedRows)
 }

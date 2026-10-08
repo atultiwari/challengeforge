@@ -36,7 +36,7 @@ export interface DiagnosticSimState {
   diagnosis: string | null
   lastSearch: { category: Category; query: string; results: readonly { id: string; label: string }[] } | null
   /** Free-text conversation with the simulated patient (absent in older attempts). */
-  conversation?: readonly { question: string; reply: string }[]
+  conversation?: readonly { question: string; reply: string; matched?: readonly string[] }[]
   ended: boolean
   endReason: EndReason | null
 }
@@ -174,7 +174,7 @@ export function conversePatient(def: DiagnosticSimDef, s: DiagnosticSimState, qu
     discovered,
     asked: [...s.asked, ...valid],
     trail,
-    conversation: [...conversation, { question, reply: answer.reply.slice(0, 1000) }],
+    conversation: [...conversation, { question, reply: answer.reply.slice(0, 1000), matched: valid }],
   }
   const counted = { ...next, actionCount: s.actionCount + 1 }
   return { ok: true, state: checkLimits(def, fireEvents(def, counted)) }

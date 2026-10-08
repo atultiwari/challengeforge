@@ -68,7 +68,7 @@ export function createServiceRunners(db: Db, config: ServicesConfig): { runServi
       const messages = [
         ...p.recent.flatMap((t) => [
           { role: 'user' as const, content: t.question },
-          { role: 'assistant' as const, content: JSON.stringify({ reply: t.reply, matched: [] }) },
+          { role: 'assistant' as const, content: JSON.stringify({ reply: t.reply, matched: t.matched }) },
         ]),
         { role: 'user' as const, content: p.question },
       ]
@@ -189,3 +189,4 @@ export * from './pack-registry'
 export * from './xapi'
 export { groundPatientAnswer, patientSystemPrompt } from './patient'
 export * from './wordpress'
+export * from './outbound'

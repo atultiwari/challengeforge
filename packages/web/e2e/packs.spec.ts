@@ -43,22 +43,24 @@ test('an admin imports a pack zip, installs one from the registry, and downloads
   await page.getByLabel('Pack (.zip, up to 32 MB)').setInputFiles({ name: 'broken.zip', mimeType: 'application/zip', buffer: Buffer.from('not a zip') })
   await page.getByRole('button', { name: 'Import pack' }).click()
   await expect(page.getByRole('alert').filter({ hasText: /zip|pack\.json/ })).toBeVisible()
-  await page.getByLabel('Pack (.zip, up to 32 MB)').setInputFiles({ name: 'upload.zip', mimeType: 'application/zip', buffer: Buffer.from(packZip('e2e-uploaded-pack', 'E2E uploaded pack')) })
+  // A unique pack per run, so a retried run imports something new too.
+  const stamp = Date.now()
+  await page.getByLabel('Pack (.zip, up to 32 MB)').setInputFiles({ name: 'upload.zip', mimeType: 'application/zip', buffer: Buffer.from(packZip(`e2e-uploaded-${stamp}`, `E2E uploaded pack ${stamp}`)) })
   await page.getByLabel('Publish right away').check()
   await page.getByRole('button', { name: 'Import pack' }).click()
   await expect(page.getByText(/Imported: 1 new/)).toBeVisible()
-  await expect(page.getByRole('listitem').filter({ hasText: 'E2E uploaded pack' })).toBeVisible()
+  await expect(page.getByRole('listitem').filter({ hasText: `E2E uploaded pack ${stamp}` })).toBeVisible()
 
   // Registry: install by slug; the checksum is verified on the server.
   const card = page.getByRole('listitem').filter({ hasText: 'From a local registry' })
-  await card.getByRole('button', { name: 'Install' }).click()
+  await card.getByRole('button', { name: /Install|Update from registry/ }).click()
   await expect(page.getByRole('listitem').filter({ hasText: 'E2E registry pack' }).first()).toBeVisible()
 
   // Download: a zip another site could import.
-  const row = page.getByRole('listitem').filter({ hasText: 'E2E uploaded pack' })
+  const row = page.getByRole('listitem').filter({ hasText: `E2E uploaded pack ${stamp}` })
   const href = await row.getByRole('link', { name: 'Download .zip' }).getAttribute('href')
   const res = await page.request.get(href!)
   expect(res.headers()['content-type']).toBe('application/zip')
   const files = unzipSync(new Uint8Array(await res.body()))
-  expect(JSON.parse(new TextDecoder().decode(files['pack.json']!)).slug).toBe('e2e-uploaded-pack')
+  expect(JSON.parse(new TextDecoder().decode(files['pack.json']!)).slug).toBe(`e2e-uploaded-${stamp}`)
 })
