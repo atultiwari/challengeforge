@@ -12,6 +12,7 @@ import {
 } from '../src'
 import { freshDb, registry, setupSite, type TestDb } from './harness'
 import { RIGHT, WRONG, quizMission } from './fixtures'
+import dka from '../../types/fixtures/diagnostic-sim/dka-young-adult.json'
 
 let t: TestDb
 let s: Awaited<ReturnType<typeof setupSite>>
@@ -136,5 +137,21 @@ describe('playing an attempt', () => {
     const preview = await startOrResume(t.db, s.author, deps, challengeId, { preview: true })
     await performAction(t.db, s.author, deps, preview.attemptId, { kind: 'submit', payload: { answer: 'c' } })
     expect(await listMyProgress(t.db, s.author)).toEqual([])
+  })
+})
+
+describe('definitions saved before a type gained a field', () => {
+  it('play with that field\'s default instead of crashing', async () => {
+    const id = await createChallenge(t.db, s.author, registry, { slug: 'old-dka', typeId: 'diagnostic-sim', typeVersion: 1, definition: dka })
+    await submitForReview(t.db, s.author, id)
+    await publish(t.db, s.admin, id)
+    // As stored by a release before the simulated patient existed.
+    const { patient_chat: _added, ...older } = (await getForAuthoring(t.db, s.author, id)).definition as Record<string, unknown>
+    await t.db.updateTable('challenge_versions').set({ definition: JSON.stringify(older) }).where('challenge_id', '=', id).execute()
+
+    const snapshot = await startOrResume(t.db, s.learner, deps, id)
+    expect(snapshot.view).not.toHaveProperty('patientChat')
+    const preview = await startOrResume(t.db, s.author, deps, id, { preview: true })
+    expect(preview.view).not.toHaveProperty('patientChat')
   })
 })

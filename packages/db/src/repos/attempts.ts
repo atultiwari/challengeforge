@@ -100,15 +100,27 @@ export type ActionOutcome =
 const DEF_CACHE_LIMIT = 256
 const defCache = new Map<string, unknown>()
 
+/**
+ * A stored definition read through its type's schema, so a field the type
+ * gained since the version was saved gets its default (e.g. `patient_chat` on
+ * a diagnostic case saved before the simulated patient existed). A definition
+ * the current schema refuses is passed on unchanged rather than locking
+ * learners out of an attempt they already started.
+ */
+export function withDefaults(type: AnyChallengeType, stored: unknown): unknown {
+  const parsed = type.definitionSchema.safeParse(stored)
+  return parsed.success ? parsed.data : stored
+}
+
 /** @internal */
-export async function definitionFor(db: Db, versionId: string): Promise<unknown> {
+export async function definitionFor(db: Db, type: AnyChallengeType, versionId: string): Promise<unknown> {
   const hit = defCache.get(versionId)
   if (hit !== undefined) {
     defCache.delete(versionId)
     defCache.set(versionId, hit)
     return hit
   }
-  const def = await loadVersionDefinition(db, versionId)
+  const def = withDefaults(type, await loadVersionDefinition(db, versionId))
   defCache.set(versionId, def)
   if (defCache.size > DEF_CACHE_LIMIT) defCache.delete(defCache.keys().next().value as string)
   return def
@@ -180,7 +192,7 @@ async function pendingJobOf(db: Db, attemptId: string): Promise<PendingJob | nul
 /** @internal */
 export async function snapshotOf(db: Db, deps: AttemptDeps, row: AttemptRow): Promise<AttemptSnapshot> {
   const type = typeFor(deps.registry, row.type_id, row.type_version)
-  const def = await definitionFor(db, row.challenge_version_id)
+  const def = await definitionFor(db, type, row.challenge_version_id)
   return {
     pendingJob: await pendingJobOf(db, row.id),
     attemptId: row.id,
@@ -197,12 +209,11 @@ export async function snapshotOf(db: Db, deps: AttemptDeps, row: AttemptRow): Pr
 type Target = Awaited<ReturnType<typeof getPlayable>>
 
 /** What a learner may play (published) or an author may preview (latest draft); throws if neither. */
-async function resolveTarget(db: Db, scope: Scope, challengeId: string, preview: boolean): Promise<Target> {
-  if (preview) return getForAuthoring(db, scope, challengeId)
-  const target = await getPlayable(db, scope, challengeId)
+async function resolveTarget(db: Db, scope: Scope, registry: TypeRegistry, challengeId: string, preview: boolean): Promise<Target> {
+  const target = preview ? await getForAuthoring(db, scope, challengeId) : await getPlayable(db, scope, challengeId)
   // A restricted pack needs a grant or a cohort assignment (repos/access.ts).
-  if (!(await canPlay(db, scope, challengeId))) throw new ForbiddenError(LOCKED_MESSAGE)
-  return target
+  if (!preview && !(await canPlay(db, scope, challengeId))) throw new ForbiddenError(LOCKED_MESSAGE)
+  return { ...target, definition: withDefaults(typeFor(registry, target.typeId, target.typeVersion), target.definition) }
 }
 
 async function openAttemptRow(db: Db, scope: Scope, userId: string, challengeId: string, preview: boolean, target: Target) {
@@ -234,7 +245,7 @@ export async function findOpenAttempt(
 ): Promise<AttemptSnapshot | null> {
   const p = requireSignedIn(scope)
   const preview = options.preview === true
-  const target = await resolveTarget(db, scope, challengeId, preview)
+  const target = await resolveTarget(db, scope, deps.registry, challengeId, preview)
   const row = await openAttemptRow(db, scope, p.userId, challengeId, preview, target)
   return row ? snapshotOf(db, deps, row) : null
 }
@@ -256,7 +267,7 @@ export async function startOrResume(
 ): Promise<AttemptSnapshot> {
   const p = requireSignedIn(scope)
   const preview = options.preview === true
-  const target = await resolveTarget(db, scope, challengeId, preview)
+  const target = await resolveTarget(db, scope, deps.registry, challengeId, preview)
   const type = typeFor(deps.registry, target.typeId, target.typeVersion)
 
   return withDeadlockRetry(() =>

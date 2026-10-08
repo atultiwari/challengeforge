@@ -57,7 +57,8 @@ async function lockAttempt(trx: Db, scope: Scope, deps: AttemptDeps, userId: str
     .forUpdate()
     .executeTakeFirst()
   if (!row) throw new NotFoundError('Attempt not found.')
-  return { row, type: typeFor(deps.registry, row.type_id, row.type_version), def: await definitionFor(trx, row.challenge_version_id) }
+  const type = typeFor(deps.registry, row.type_id, row.type_version)
+  return { row, type, def: await definitionFor(trx, type, row.challenge_version_id) }
 }
 
 const isJobToken = (token: string | null): token is string => token !== null && token.startsWith(JOB_KEY_PREFIX)

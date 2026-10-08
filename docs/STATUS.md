@@ -54,7 +54,7 @@ judgement call made without the owner (review in one pass)._
 ## Test totals (latest local run)
 
 - 493 unit tests.
-- 147 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
+- 148 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
 - 22 Playwright end-to-end journeys (21 on the main site, plus one on a fresh install), against MariaDB 11.8 in CI. They include a simulated LMS, a WordPress sign-on, multi-site and the mock payment checkout.
 
 ## Phase 5 (complete)
