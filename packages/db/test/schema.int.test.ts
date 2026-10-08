@@ -32,6 +32,6 @@ describe(`schema on ${process.env['TEST_DB_URL'] ?? '?'}`, () => {
   it('migrates down cleanly and back up again', async () => {
     expect((await migrateDownAll(t.db)).error).toBeNull()
     const report = await migrateToLatest(t.db)
-    expect(report).toEqual({ applied: ['0001_init', '0002_llm', '0003_jobs', '0004_job_leases', '0005_audit', '0006_editors'], error: null })
+    expect(report).toEqual({ applied: ['0001_init', '0002_llm', '0003_jobs', '0004_job_leases', '0005_audit', '0006_editors', '0007_cohorts'], error: null })
   })
 })

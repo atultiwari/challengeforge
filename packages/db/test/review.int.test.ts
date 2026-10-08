@@ -63,10 +63,10 @@ describe('review queue', () => {
     await expect(overrideAssessment(t.db, s.admin, attemptId, { passed: true, points: 100 })).rejects.toMatchObject({ code: 'not_found' })
   })
 
-  it('only admins of the same site may review', async () => {
+  it('only reviewers of the same site may review; others cannot even tell the result exists', async () => {
     const { attemptId } = await finishedAttempt('protected')
     await expect(listReviewQueue(t.db, s.author)).rejects.toMatchObject({ code: 'forbidden' })
-    await expect(overrideAssessment(t.db, s.learner, attemptId, { passed: true, points: 100 })).rejects.toMatchObject({ code: 'forbidden' })
+    await expect(overrideAssessment(t.db, s.learner, attemptId, { passed: true, points: 100 })).rejects.toMatchObject({ code: 'not_found' })
     await expect(overrideAssessment(t.db, other.admin, attemptId, { passed: true, points: 100 })).rejects.toMatchObject({ code: 'not_found' })
   })
 })

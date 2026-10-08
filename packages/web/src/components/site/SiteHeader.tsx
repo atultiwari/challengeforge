@@ -1,10 +1,12 @@
 import Link from 'next/link'
-import { hasRole } from '@challengeforge/db'
+import { hasRole, isTeacher } from '@challengeforge/db'
+import { db } from '@/server/db'
 import { currentScope, currentSite } from '@/server/scope'
 import { SignOutButton } from './SignOutButton'
 
 export async function SiteHeader() {
   const [site, { scope, user }] = await Promise.all([currentSite(), currentScope()])
+  const teaches = user ? await isTeacher(db(), scope) : false
   return (
     <header className="border-b border-line bg-surface">
       <nav aria-label="Main" className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
@@ -13,6 +15,7 @@ export async function SiteHeader() {
         </Link>
         <Link href="/" className="text-sm hover:underline">Challenges</Link>
         {hasRole(scope, 'author') && <Link href="/author" className="text-sm hover:underline">Author</Link>}
+        {teaches && <Link href="/teach" className="text-sm hover:underline">Teach</Link>}
         {hasRole(scope, 'editor') && <Link href="/admin" className="text-sm hover:underline">{hasRole(scope, 'admin') ? 'Admin' : 'Review'}</Link>}
         <div className="ml-auto flex items-center gap-4">
           {user ? (

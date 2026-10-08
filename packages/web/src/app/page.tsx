@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { listMyProgress, listPlayable, type ChallengeSummary, type ProgressRow } from '@challengeforge/db'
+import { listMyCohorts, listMyProgress, listPlayable, type ChallengeSummary, type Cohort, type ProgressRow } from '@challengeforge/db'
 import { db } from '@/server/db'
 import { currentScope } from '@/server/scope'
 
@@ -14,9 +14,10 @@ function groupBySection(challenges: readonly ChallengeSummary[]): [string, Chall
 
 export default async function CatalogPage() {
   const { scope, user } = await currentScope()
-  const [challenges, progress] = await Promise.all([
+  const [challenges, progress, cohorts] = await Promise.all([
     listPlayable(db(), scope),
     user ? listMyProgress(db(), scope) : Promise.resolve([] as ProgressRow[]),
+    user ? listMyCohorts(db(), scope).then((c) => c.learning) : Promise.resolve([] as Cohort[]),
   ])
   const byChallenge = new Map(progress.map((p) => [p.challengeId, p]))
 
@@ -31,6 +32,19 @@ export default async function CatalogPage() {
           </p>
         )}
       </header>
+      {user && (
+        <section className="space-y-2" aria-labelledby="my-cohorts">
+          <h2 id="my-cohorts" className="text-2xl">Your cohorts</h2>
+          {cohorts.length > 0 && (
+            <ul className="flex flex-wrap gap-2">
+              {cohorts.map((c) => (
+                <li key={c.id}><Link href={`/cohorts/${c.id}`} className="btn-secondary">{c.name}</Link></li>
+              ))}
+            </ul>
+          )}
+          <p className="text-sm"><Link className="underline" href="/join">Join a cohort with a code</Link></p>
+        </section>
+      )}
       {challenges.length === 0 && <p className="card">No challenges have been published yet.</p>}
       {groupBySection(challenges).map(([section, items]) => (
         <section key={section} className="space-y-3" aria-labelledby={`s-${section}`}>

@@ -236,6 +236,17 @@ const summaryColumns = [
   'pack_sections.position as sectionPosition',
 ] as const
 
+export interface PackSummary {
+  id: string
+  slug: string
+  title: string
+}
+
+/** The site's packs, for choosing what to assign. */
+export async function listPacks(db: Db, scope: Scope): Promise<PackSummary[]> {
+  return db.selectFrom('packs').select(['id', 'slug', 'title']).where('site_id', '=', scope.siteId).orderBy('title').limit(500).execute()
+}
+
 /** What learners can play: published, not archived, on this site. Titles only. */
 export async function listPlayable(db: Db, scope: Scope): Promise<ChallengeSummary[]> {
   const rows = await db

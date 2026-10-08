@@ -17,6 +17,12 @@ export type AuditAction =
   | 'account.password_reset'
   | 'collaborator.added'
   | 'collaborator.removed'
+  | 'org.created'
+  | 'org.member_set'
+  | 'org.member_removed'
+  | 'cohort.created'
+  | 'cohort.updated'
+  | 'cohort.member_removed'
 
 export interface AuditEntry {
   action: AuditAction

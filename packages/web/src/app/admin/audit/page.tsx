@@ -14,6 +14,12 @@ const LABELS: Record<AuditRecord['action'], string> = {
   'account.password_reset': 'Reset their password',
   'collaborator.added': 'Added a co-author',
   'collaborator.removed': 'Removed a co-author',
+  'org.created': 'Created an organisation',
+  'org.member_set': 'Set an organisation role',
+  'org.member_removed': 'Removed someone from an organisation',
+  'cohort.created': 'Created a cohort',
+  'cohort.updated': 'Changed a cohort',
+  'cohort.member_removed': 'Removed someone from a cohort',
 }
 
 /** Details as short "key: value" pairs; values are shown as text, never as markup. */

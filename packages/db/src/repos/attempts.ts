@@ -31,6 +31,7 @@ import { NotFoundError, hasRole, requireSignedIn, type Scope } from '../scope'
 import { datasetLoaderFor } from './assets'
 import { getForAuthoring, getPlayable, loadVersionDefinition } from './content'
 import { withDeadlockRetry } from '../tx'
+import { canReviewAsInstructor } from './cohort-progress'
 
 /** Performs a service a type asked for (e.g. a model reply); the server adds secrets such as API keys. */
 export type ServiceRunner = (
@@ -310,14 +311,15 @@ export function servicesFor(db: Db, deps: AttemptDeps, challengeId: string): Ser
   return { loadDataset: datasetLoaderFor(db, challengeId), ...(deps.services ?? {}) }
 }
 
-/** Reads an attempt: its owner, or an editor or admin reviewing it. */
+/** Reads an attempt: its owner, an editor, or an instructor of a cohort it belongs to. */
 export async function getAttempt(db: Db, scope: Scope, deps: AttemptDeps, attemptId: string): Promise<AttemptSnapshot> {
   const p = requireSignedIn(scope)
-  let query = db.selectFrom('attempts').select(ATTEMPT_COLUMNS).where('id', '=', attemptId).where('site_id', '=', scope.siteId)
-  if (!hasRole(scope, 'editor')) query = query.where('user_id', '=', p.userId)
-  const row = await query.executeTakeFirst()
+  const row = await db.selectFrom('attempts').select(ATTEMPT_COLUMNS).where('id', '=', attemptId).where('site_id', '=', scope.siteId).executeTakeFirst()
+  const allowed =
+    row !== undefined &&
+    (row.user_id === p.userId || hasRole(scope, 'editor') || (await canReviewAsInstructor(db, scope, row.user_id, row.challenge_id)))
   // Someone else's attempt is "not found", so ids cannot be probed.
-  if (!row) throw new NotFoundError('Attempt not found.')
+  if (!row || !allowed) throw new NotFoundError('Attempt not found.')
   return snapshotOf(db, deps, row)
 }
 

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { postJson } from '@/lib/api'
 
-export function ReviewForm({ attemptId, passed, points }: { attemptId: string; passed: boolean; points: number }) {
+export function ReviewForm({ attemptId, passed, points, returnTo }: { attemptId: string; passed: boolean; points: number; returnTo: string }) {
   const router = useRouter()
   const [verdict, setVerdict] = useState(passed)
   const [value, setValue] = useState(String(points))
@@ -15,7 +15,7 @@ export function ReviewForm({ attemptId, passed, points }: { attemptId: string; p
         e.preventDefault()
         const r = await postJson(`/api/admin/reviews/${attemptId}`, { passed: verdict, points: Number(value) })
         if (!r.ok) return setError(r.error.message)
-        router.push('/admin')
+        router.push(returnTo)
         router.refresh()
       }}
     >

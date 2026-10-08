@@ -271,6 +271,61 @@ export interface Database {
   jobs: JobsTable
   audit_log: AuditLogTable
   challenge_collaborators: ChallengeCollaboratorsTable
+  organisations: OrganisationsTable
+  org_members: OrgMembersTable
+  cohorts: CohortsTable
+  cohort_members: CohortMembersTable
+  cohort_assignments: CohortAssignmentsTable
+}
+
+export type OrgRole = 'member' | 'instructor' | 'org_admin'
+export type CohortRole = 'learner' | 'instructor'
+
+export interface OrganisationsTable {
+  id: string
+  site_id: string
+  slug: string
+  name: string
+  created_at: Timestamp
+}
+
+export interface OrgMembersTable {
+  org_id: string
+  user_id: string
+  site_id: string
+  role: OrgRole
+  created_at: Timestamp
+}
+
+export interface CohortsTable {
+  id: string
+  site_id: string
+  org_id: string
+  name: string
+  join_code: string
+  joining_open: Bool
+  archived: Bool
+  created_by: string
+  created_at: Timestamp
+}
+
+export interface CohortMembersTable {
+  cohort_id: string
+  user_id: string
+  site_id: string
+  role: CohortRole
+  joined_at: Timestamp
+}
+
+export interface CohortAssignmentsTable {
+  id: string
+  cohort_id: string
+  site_id: string
+  pack_id: string | null
+  challenge_id: string | null
+  due_at: NullableTimestamp
+  position: number
+  created_at: Timestamp
 }
 
 export interface ChallengeCollaboratorsTable {

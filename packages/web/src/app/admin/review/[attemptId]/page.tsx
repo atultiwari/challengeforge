@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { NotFoundError, getAttempt } from '@challengeforge/db'
+import { NotFoundError, getAttemptForReview, hasRole } from '@challengeforge/db'
 import { ReviewForm } from '@/components/admin/ReviewForm'
 import { AssessmentSummary } from '@/components/player/AssessmentSummary'
 import { attemptDeps } from '@/server/attempt-deps'
@@ -11,10 +11,11 @@ export const metadata = { title: 'Review a result' }
 /** What the learner actually did (e.g. the whole conversation), next to the automatic result. */
 export default async function ReviewPage({ params }: { params: Promise<{ attemptId: string }> }) {
   const { attemptId } = await params
-  const scope = await requirePageRole('editor', `/admin/review/${attemptId}`)
+  // Editors review anything; instructors only their own cohorts' results (getAttemptForReview decides).
+  const scope = await requirePageRole('learner', `/admin/review/${attemptId}`)
   let attempt
   try {
-    attempt = await getAttempt(db(), scope, attemptDeps, attemptId)
+    attempt = await getAttemptForReview(db(), scope, attemptDeps, attemptId)
   } catch (err) {
     if (err instanceof NotFoundError) notFound()
     throw err
@@ -37,7 +38,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ attempt
         </section>
       )}
       {attempt.assessment && <AssessmentSummary assessment={attempt.assessment} />}
-      {attempt.assessment && <ReviewForm attemptId={attemptId} passed={attempt.assessment.passed} points={attempt.assessment.points} />}
+      {attempt.assessment && <ReviewForm attemptId={attemptId} passed={attempt.assessment.passed} points={attempt.assessment.points} returnTo={hasRole(scope, 'editor') ? '/admin' : '/teach/review'} />}
     </div>
   )
 }

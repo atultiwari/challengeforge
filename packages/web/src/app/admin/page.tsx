@@ -17,7 +17,12 @@ export default async function AdminPage() {
       <header>
         <p className="eyebrow">Admin</p>
         <h1 className="text-4xl">{isAdmin ? 'Site administration' : 'Review and publishing'}</h1>
-        {isAdmin && <p className="mt-2 text-sm"><Link className="underline" href="/admin/audit">Audit log</Link></p>}
+        {isAdmin && (
+          <p className="mt-2 flex gap-4 text-sm">
+            <Link className="underline" href="/admin/orgs">Organisations</Link>
+            <Link className="underline" href="/admin/audit">Audit log</Link>
+          </p>
+        )}
       </header>
       <section className="space-y-3">
         <h2 className="text-2xl">Results waiting for review</h2>
