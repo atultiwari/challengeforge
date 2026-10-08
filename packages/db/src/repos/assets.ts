@@ -8,6 +8,7 @@ import type { Db } from '../client'
 import { newId } from '../ids'
 import type { DatasetLoader, DatasetRow } from '@challengeforge/engine'
 import { NotFoundError, requireRole, requireSignedIn, type Scope } from '../scope'
+import { canPlay } from './access'
 import { canEdit } from './collaborators'
 
 /** MEDIUMBLOB limit, less headroom. */
@@ -108,7 +109,7 @@ export async function getAssetForPlay(db: Db, scope: Scope, challengeId: string,
     .executeTakeFirst()
   if (!row) throw new NotFoundError('Asset not found.')
   const editor = await canEdit(db, scope, { id: challengeId, created_by: row.createdBy })
-  const playable = row.publishedVersionId !== null && row.status !== 'archived' && row.visibility === 'public'
+  const playable = row.publishedVersionId !== null && row.status !== 'archived' && row.visibility === 'public' && (await canPlay(db, scope, challengeId))
   if (!editor && !playable) throw new NotFoundError('Asset not found.')
   return { contentType: row.contentType, bytes: row.bytes, sha256: row.sha256 }
 }

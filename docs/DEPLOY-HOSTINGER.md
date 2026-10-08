@@ -64,6 +64,7 @@ pnpm release
 | `MAIL_FROM` | e.g. `Your Site <no-reply@your-domain.example>`. Use a mailbox you created in hPanel → Emails. |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | Hostinger email: `smtp.hostinger.com`, port `465`, the mailbox address and its password. |
 | `REQUIRE_EMAIL_VERIFICATION` | `true` makes new accounts confirm their email before signing in. Needs `MAIL_MODE=smtp`. Default `false`. |
+| `PAYMENTS_PROVIDER` | `none` (default), `razorpay` or `stripe`. See section 7. |
 | `BYOK_ENCRYPTION_KEY` | Optional. Generate with `openssl rand -base64 32`; it lets learners use their own API keys. |
 
 ## 4. First-time setup (hPanel → Advanced → SSH access)
@@ -120,7 +121,33 @@ in section 4):
 cd ~/path/to/your/node/app && node cli.mjs run-jobs --max-seconds 240
 ```
 
-## 7. Upgrades
+## 7. Selling packs (optional)
+
+1. Choose a provider and create **test-mode** keys first:
+   - **Razorpay:** Dashboard → Account & Settings → API keys. Set
+     `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`.
+   - **Stripe:** Developers → API keys. Set `STRIPE_SECRET_KEY`.
+2. Add a webhook in the provider's dashboard and copy its signing secret:
+   - **Razorpay:** URL `https://your-domain.example/api/payments/webhook/razorpay`.
+     Events: `payment_link.paid`, `payment_link.expired`,
+     `payment_link.cancelled`, `refund.processed`. Set `RAZORPAY_WEBHOOK_SECRET`.
+   - **Stripe:** URL `https://your-domain.example/api/payments/webhook/stripe`.
+     Events: `checkout.session.completed`,
+     `checkout.session.async_payment_succeeded`,
+     `checkout.session.async_payment_failed`, `checkout.session.expired`,
+     `charge.refunded`. Set `STRIPE_WEBHOOK_SECRET`.
+3. Set `PAYMENTS_PROVIDER` and restart the app.
+4. In **Admin → Access and payments**, restrict a pack and give it a price.
+5. Buy it once yourself in test mode. Check that access appears, then refund
+   it in the provider's dashboard and check that access ends. Only then
+   switch to live keys.
+
+**How it works.** Only a signed webhook grants access, never the page the
+buyer returns to. The amount always comes from your price, and a paid amount
+that doesn't match is rejected. A *full* refund ends access; a partial refund
+does not.
+
+## 8. Upgrades
 
 1. `pnpm release` locally.
 2. Upload the new archive in hPanel.
@@ -130,7 +157,7 @@ cd ~/path/to/your/node/app && node cli.mjs run-jobs --max-seconds 240
 Attempts in progress are pinned to the version they started on, so publishing
 changes never disturbs a learner mid-attempt.
 
-## 8. Backups
+## 9. Backups
 
 The database holds everything, including uploaded datasets and case files.
 
@@ -143,7 +170,7 @@ The database holds everything, including uploaded datasets and case files.
 
 - **Test a restore** into a scratch database once, before you need it.
 
-## 9. Operating notes
+## 10. Operating notes
 
 - **Cold starts.** Hostinger stops idle Node apps and starts them on the next
   request. The first page after a quiet period can take a few seconds.

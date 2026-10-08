@@ -18,6 +18,7 @@ async function prepare() {
   cli('migrate')
   cli('create-admin', '--email', E2E_ADMIN.email, '--name', 'E2E Admin')
   cli('import-pack', path.resolve(import.meta.dirname, 'fixtures/pack'), '--publish')
+  cli('import-pack', path.resolve(import.meta.dirname, 'fixtures/premium'), '--publish')
   cli('import-pack', path.resolve(import.meta.dirname, '../../../examples/packs/clinical-demo'), '--publish')
 }
 

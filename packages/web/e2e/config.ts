@@ -21,4 +21,6 @@ export const E2E_ENV: Record<string, string> = {
   DISABLE_RATE_LIMITS_FOR_TESTS: 'true',
   MAIL_MODE: 'file',
   MAIL_OUTBOX_DIR: MAIL_OUTBOX,
+  // The development payment provider: a test checkout page on our own site (refused in production).
+  PAYMENTS_PROVIDER: 'mock',
 }

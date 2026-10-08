@@ -23,6 +23,13 @@ export type AuditAction =
   | 'cohort.created'
   | 'cohort.updated'
   | 'cohort.member_removed'
+  | 'pack.access_set'
+  | 'access.granted'
+  | 'access.revoked'
+  | 'product.saved'
+  | 'payment.paid'
+  | 'payment.refunded'
+  | 'payment.rejected'
 
 export interface AuditEntry {
   action: AuditAction

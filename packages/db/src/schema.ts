@@ -81,6 +81,8 @@ export interface PacksTable {
   slug: string
   title: string
   description: string
+  /** Defaults to open; restricted packs need a grant or a cohort assignment. */
+  access: ColumnType<PackAccess, PackAccess | undefined, PackAccess>
   created_at: Timestamp
 }
 
@@ -276,6 +278,63 @@ export interface Database {
   cohorts: CohortsTable
   cohort_members: CohortMembersTable
   cohort_assignments: CohortAssignmentsTable
+  access_grants: AccessGrantsTable
+  products: ProductsTable
+  payments: PaymentsTable
+  payment_events: PaymentEventsTable
+}
+
+export type PackAccess = 'open' | 'restricted'
+export type GrantSource = 'admin' | 'payment' | 'lti'
+export type PaymentStatus = 'created' | 'paid' | 'refunded' | 'failed'
+
+export interface AccessGrantsTable {
+  id: string
+  site_id: string
+  user_id: string
+  pack_id: string
+  source: GrantSource
+  source_ref: string
+  expires_at: NullableTimestamp
+  revoked_at: NullableTimestamp
+  created_at: Timestamp
+}
+
+export interface ProductsTable {
+  id: string
+  site_id: string
+  pack_id: string
+  /** In the currency's minor unit (paise, cents). */
+  price_minor: number
+  currency: string
+  active: Bool
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export interface PaymentsTable {
+  id: string
+  site_id: string
+  user_id: string
+  product_id: string
+  pack_id: string
+  provider: string
+  /** The provider's checkout id (Stripe session, Razorpay payment link). */
+  provider_ref: string | null
+  /** The provider's payment/charge id, learned when it is paid; refunds refer to it. */
+  provider_payment_ref: string | null
+  amount_minor: number
+  currency: string
+  status: PaymentStatus
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export interface PaymentEventsTable {
+  provider: string
+  event_id: string
+  type: string
+  received_at: Timestamp
 }
 
 export type OrgRole = 'member' | 'instructor' | 'org_admin'

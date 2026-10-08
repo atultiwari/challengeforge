@@ -20,6 +20,7 @@ export default async function AdminPage() {
         {isAdmin && (
           <p className="mt-2 flex gap-4 text-sm">
             <Link className="underline" href="/admin/orgs">Organisations</Link>
+            <Link className="underline" href="/admin/access">Access and payments</Link>
             <Link className="underline" href="/admin/audit">Audit log</Link>
           </p>
         )}

@@ -27,11 +27,12 @@ import {
 import type { Db } from '../client'
 import { newId, newSeed } from '../ids'
 import { fromJson, toBool, toJson } from '../json'
-import { NotFoundError, hasRole, requireSignedIn, type Scope } from '../scope'
+import { ForbiddenError, NotFoundError, hasRole, requireSignedIn, type Scope } from '../scope'
 import { datasetLoaderFor } from './assets'
 import { getForAuthoring, getPlayable, loadVersionDefinition } from './content'
 import { withDeadlockRetry } from '../tx'
 import { canReviewAsInstructor } from './cohort-progress'
+import { LOCKED_MESSAGE, canPlay } from './access'
 
 /** Performs a service a type asked for (e.g. a model reply); the server adds secrets such as API keys. */
 export type ServiceRunner = (
@@ -200,7 +201,11 @@ type Target = Awaited<ReturnType<typeof getPlayable>>
 
 /** What a learner may play (published) or an author may preview (latest draft); throws if neither. */
 async function resolveTarget(db: Db, scope: Scope, challengeId: string, preview: boolean): Promise<Target> {
-  return preview ? getForAuthoring(db, scope, challengeId) : getPlayable(db, scope, challengeId)
+  if (preview) return getForAuthoring(db, scope, challengeId)
+  const target = await getPlayable(db, scope, challengeId)
+  // A restricted pack needs a grant or a cohort assignment (repos/access.ts).
+  if (!(await canPlay(db, scope, challengeId))) throw new ForbiddenError(LOCKED_MESSAGE)
+  return target
 }
 
 async function openAttemptRow(db: Db, scope: Scope, userId: string, challengeId: string, preview: boolean, target: Target) {

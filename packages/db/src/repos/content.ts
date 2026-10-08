@@ -8,13 +8,14 @@ import type { Db } from '../client'
 import { newId } from '../ids'
 import { fromJson, toJson } from '../json'
 import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireRole, type Scope } from '../scope'
-import type { ChallengeStatus } from '../schema'
+import type { ChallengeStatus, PackAccess } from '../schema'
 import { withDeadlockRetry } from '../tx'
 import { recordAudit } from './audit'
 import { canEdit } from './collaborators'
 
 export interface ChallengeSummary {
   id: string
+  packId: string | null
   slug: string
   title: string
   typeId: string
@@ -27,6 +28,7 @@ export interface ChallengeSummary {
 
 export interface PlayableChallenge {
   id: string
+  packId: string | null
   slug: string
   title: string
   typeId: string
@@ -226,6 +228,7 @@ export async function archive(db: Db, scope: Scope, challengeId: string): Promis
 
 const summaryColumns = [
   'challenges.id as id',
+  'challenges.pack_id as packId',
   'challenges.slug as slug',
   'challenges.title as title',
   'challenges.type_id as typeId',
@@ -240,11 +243,12 @@ export interface PackSummary {
   id: string
   slug: string
   title: string
+  access: PackAccess
 }
 
 /** The site's packs, for choosing what to assign. */
 export async function listPacks(db: Db, scope: Scope): Promise<PackSummary[]> {
-  return db.selectFrom('packs').select(['id', 'slug', 'title']).where('site_id', '=', scope.siteId).orderBy('title').limit(500).execute()
+  return db.selectFrom('packs').select(['id', 'slug', 'title', 'access']).where('site_id', '=', scope.siteId).orderBy('title').limit(500).execute()
 }
 
 /** What learners can play: published, not archived, on this site. Titles only. */
@@ -292,6 +296,7 @@ export async function getPlayable(db: Db, scope: Scope, challengeId: string): Pr
     .innerJoin('challenge_versions', 'challenge_versions.id', 'challenges.published_version_id')
     .select([
       'challenges.id as id',
+      'challenges.pack_id as packId',
       'challenges.slug as slug',
       'challenges.title as title',
       'challenges.type_id as typeId',
@@ -323,6 +328,7 @@ export async function getForAuthoring(db: Db, scope: Scope, challengeId: string)
     .innerJoin('challenge_versions', 'challenge_versions.challenge_id', 'challenges.id')
     .select([
       'challenges.id as id',
+      'challenges.pack_id as packId',
       'challenges.slug as slug',
       'challenges.title as title',
       'challenges.type_id as typeId',

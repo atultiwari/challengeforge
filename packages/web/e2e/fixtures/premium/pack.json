@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "slug": "e2e-premium",
+  "title": "E2E premium pack (synthetic)",
+  "description": "A synthetic paid pack for end-to-end tests.",
+  "sections": [
+    {
+      "slug": "paid",
+      "title": "Premium"
+    }
+  ],
+  "challenges": [
+    {
+      "slug": "e2e-premium-quiz",
+      "section": "paid",
+      "type": "question-set@1",
+      "definition": "challenges/premium-quiz.json"
+    }
+  ]
+}

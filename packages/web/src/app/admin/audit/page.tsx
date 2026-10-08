@@ -20,6 +20,13 @@ const LABELS: Record<AuditRecord['action'], string> = {
   'cohort.created': 'Created a cohort',
   'cohort.updated': 'Changed a cohort',
   'cohort.member_removed': 'Removed someone from a cohort',
+  'pack.access_set': 'Changed who can play a pack',
+  'access.granted': 'Gave access to a pack',
+  'access.revoked': 'Took away access to a pack',
+  'product.saved': 'Set a price',
+  'payment.paid': 'Payment received',
+  'payment.refunded': 'Payment refunded',
+  'payment.rejected': 'Payment rejected (amount mismatch)',
 }
 
 /** Details as short "key: value" pairs; values are shown as text, never as markup. */

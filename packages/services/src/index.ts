@@ -162,3 +162,4 @@ export function createServiceRunners(db: Db, config: ServicesConfig): { runServi
 }
 export { servicesConfigFromEnv } from './config'
 export * from './mail'
+export * from './payments'

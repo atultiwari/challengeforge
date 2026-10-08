@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { listMyCohorts, listMyProgress, listPlayable, type ChallengeSummary, type Cohort, type ProgressRow } from '@challengeforge/db'
+import { listMyCohorts, listMyProgress, listPlayable, lockedChallengeIds, type ChallengeSummary, type Cohort, type ProgressRow } from '@challengeforge/db'
 import { db } from '@/server/db'
 import { currentScope } from '@/server/scope'
 
@@ -20,6 +20,7 @@ export default async function CatalogPage() {
     user ? listMyCohorts(db(), scope).then((c) => c.learning) : Promise.resolve([] as Cohort[]),
   ])
   const byChallenge = new Map(progress.map((p) => [p.challengeId, p]))
+  const locked = await lockedChallengeIds(db(), scope, challenges)
 
   return (
     <div className="space-y-10">
@@ -57,7 +58,7 @@ export default async function CatalogPage() {
                   <Link href={`/play/${c.id}`} className="card block transition-colors hover:border-accent">
                     <p className="font-semibold">{c.title}</p>
                     <p className="mt-1 text-sm text-ink-muted">
-                      {p ? (p.passed ? `Passed · ${p.bestPoints} points` : `Attempted ${p.attempts}×`) : 'Not started'}
+                      {locked.has(c.id) ? 'Locked · needs access' : p ? (p.passed ? `Passed · ${p.bestPoints} points` : `Attempted ${p.attempts}×`) : 'Not started'}
                     </p>
                   </Link>
                 </li>

@@ -1,5 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
-import { ForbiddenError, NotFoundError, findOpenAttempt, getForAuthoring, getPlayable } from '@challengeforge/db'
+import { ForbiddenError, NotFoundError, canPlay, findOpenAttempt, getForAuthoring, getPlayable, listPacks, listProducts } from '@challengeforge/db'
+import { LockedNotice } from '@/components/payments/LockedNotice'
+import { paymentProvider } from '@/server/payments'
 import { Player } from '@/components/player/Player'
 import { attemptDeps } from '@/server/attempt-deps'
 import { db } from '@/server/db'
@@ -18,6 +20,25 @@ export default async function PlayPage({
   if (!scope.principal) {
     const back = `/play/${challengeId}${isPreview ? '?preview=1' : ''}`
     redirect(`/sign-in?next=${encodeURIComponent(back)}`)
+  }
+  if (!isPreview && !(await canPlay(db(), scope, challengeId))) {
+    let challenge
+    try {
+      challenge = await getPlayable(db(), scope, challengeId)
+    } catch (err) {
+      if (err instanceof NotFoundError) notFound()
+      throw err
+    }
+    const packId = challenge.packId
+    const [packs, products] = await Promise.all([listPacks(db(), scope), listProducts(db(), scope)])
+    return (
+      <LockedNotice
+        title={challenge.title}
+        packTitle={packs.find((p) => p.id === packId)?.title ?? null}
+        product={products.find((p) => p.packId === packId) ?? null}
+        canBuy={paymentProvider() !== null}
+      />
+    )
   }
   try {
     // A GET only RESUMES an attempt; starting one is a POST (a link cannot start attempts).
