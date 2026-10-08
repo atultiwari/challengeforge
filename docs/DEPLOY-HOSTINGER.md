@@ -96,7 +96,15 @@ ADMIN_PASSWORD='a long new password' node cli.mjs create-admin --email you@examp
 
 Then restart the Node.js app in hPanel and sign in.
 
-## 5. Import the Clinical AI pack (private)
+## 5. Packs
+
+**In the browser:** Admin → Packs. Upload a pack `.zip` (up to 32 MB), or
+install one from a registry. To use the public registry, set
+`PACK_REGISTRY_URL=https://raw.githubusercontent.com/atultiwari/challengeforge/main/registry/index.json`.
+A registry pack is installed only if its download matches the checksum in
+the index. Any pack can be downloaded as a `.zip` and imported elsewhere.
+
+### The Clinical AI pack (private)
 
 The pack comes from the **private** repo `atultiwari/challengeforge-pack-clinical-ai`.
 

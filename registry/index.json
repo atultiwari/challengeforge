@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "packs": [
+    {
+      "slug": "clinical-demo",
+      "title": "Demo pack (synthetic, not clinically reviewed)",
+      "description": "Synthetic challenges that show the interactive and AI paradigms. The clinical case is not for teaching until a clinician signs it off.",
+      "version": "1",
+      "url": "https://raw.githubusercontent.com/atultiwari/challengeforge/main/registry/clinical-demo.zip",
+      "sha256": "9f454a2c73caa509df5b24f05db496e757e270962ffd2d06af17edcb0aaf0375"
+    }
+  ]
+}

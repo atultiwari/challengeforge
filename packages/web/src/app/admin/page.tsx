@@ -21,6 +21,7 @@ export default async function AdminPage() {
         <p className="mt-2 text-sm"><Link className="underline" href="/admin/analytics">Analytics</Link></p>
         {isAdmin && (
           <p className="mt-2 flex flex-wrap gap-4 text-sm">
+            <Link className="underline" href="/admin/packs">Packs</Link>
             <Link className="underline" href="/admin/orgs">Organisations</Link>
             <Link className="underline" href="/admin/access">Access and payments</Link>
             <Link className="underline" href="/admin/certificates">Certificates</Link>

@@ -58,7 +58,7 @@ judgement call made without the owner (review in one pass)._
 ## In progress now
 
 **Phase 5** ([plan](PHASE-5-PLAN.md)):
-- **S1:** pack upload, download and a registry, all in the browser.
+- **S1, packs in the browser: done.** Upload and download `.zip`, plus install from a checksum-verified registry. The public registry is in `registry/`.
 - **S2:** xAPI export and an LRS.
 - **S3:** LLM simulated patient.
 - **S4:** WordPress connector.

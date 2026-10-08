@@ -12,6 +12,7 @@
     "@challengeforge/db": "workspace:*",
     "@challengeforge/engine": "workspace:*",
     "@challengeforge/llm-gateway": "workspace:*",
+    "fflate": "^0.8.3",
     "jose": "^6.2.12",
     "nodemailer": "^10.0.16",
     "zod": "^4.1.0"

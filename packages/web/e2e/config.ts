@@ -23,4 +23,6 @@ export const E2E_ENV: Record<string, string> = {
   MAIL_OUTBOX_DIR: MAIL_OUTBOX,
   // The development payment provider: a test checkout page on our own site (refused in production).
   PAYMENTS_PROVIDER: 'mock',
+  // A local pack registry served by the packs spec (http is allowed for localhost outside production only).
+  PACK_REGISTRY_URL: 'http://localhost:3298/index.json',
 }
