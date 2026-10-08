@@ -1,6 +1,6 @@
 # Project status
 
-_Last updated: 2026-10-08. This page is kept current as work proceeds; the
+_Last updated: 2026-10-09. This page is kept current as work proceeds; the
 phase reports hold the detail, and [`DECISIONS.md`](DECISIONS.md) logs every
 judgement call made without the owner (review in one pass)._
 
@@ -13,7 +13,7 @@ judgement call made without the owner (review in one pass)._
 | 2 | Interactive in the product (diagnostic sims, AI missions, jobs, review queue, pack export) | ✅ Done | [PHASE-2-REPORT](PHASE-2-REPORT.md) |
 | 3 | Publishing and institutions (roles, cohorts, payments, certificates, analytics, LTI 1.3) | ✅ Done (reviewed; all high and medium findings fixed) | [PHASE-3-REPORT](PHASE-3-REPORT.md) |
 | 4 | Multi-site and themes | ✅ Done (R1–R4) | [PHASE-4-REPORT](PHASE-4-REPORT.md) |
-| 5 | Ecosystem (pack registry, type SDK, xAPI, LLM patient, WordPress) | 🚧 Started | [PHASE-5-PLAN](PHASE-5-PLAN.md) |
+| 5 | Ecosystem (pack registry, type SDK, xAPI, LLM patient, WordPress) | ✅ Done (reviewed; all high and medium findings fixed) | [PHASE-5-REPORT](PHASE-5-REPORT.md) |
 
 **Deployed:** not yet. Hostinger's database is confirmed as **MariaDB 11.8**
 (owner, 2026-10-08), and CI and local development now test on it.
@@ -43,7 +43,9 @@ judgement call made without the owner (review in one pass)._
   - grants and certificates;
   - LMS registration (LTI 1.3: deep linking and grade passback);
   - site name, logo and theme (WCAG-checked colours);
-  - pack import and export from the CLI.
+  - packs: upload, download, or install from a registry;
+  - xAPI export and an optional LRS;
+  - a WordPress plugin with single sign-on.
 - **Operations:**
   - one release archive;
   - `cli` for migrations, admins, packs and cron jobs (`run-jobs` advances AI evaluations, sends LMS grades and cleans up);
@@ -51,11 +53,11 @@ judgement call made without the owner (review in one pass)._
 
 ## Test totals (latest local run)
 
-- 466 unit tests.
-- 136 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
-- 18 Playwright end-to-end journeys (17 on the main site, plus one on a fresh install), against MariaDB 11.8 in CI. They include a simulated LMS and the mock payment checkout.
+- 493 unit tests.
+- 147 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
+- 22 Playwright end-to-end journeys (21 on the main site, plus one on a fresh install), against MariaDB 11.8 in CI. They include a simulated LMS, a WordPress sign-on, multi-site and the mock payment checkout.
 
-## In progress now
+## Phase 5 (complete)
 
 **Phase 5** ([plan](PHASE-5-PLAN.md)):
 - **S1, packs in the browser: done.** Upload and download `.zip`, plus install from a checksum-verified registry. The public registry is in `registry/`.
@@ -63,6 +65,12 @@ judgement call made without the owner (review in one pass)._
 - **S3, simulated patient: done.** Learners can ask the patient in their own words. It's grounded in the case's history list, and grading still uses what was revealed. Turned on in the demo case.
 - **S4, WordPress connector: done.** A plugin with a shortcode, and single sign-on with signed, single-use tokens and members linked by WordPress id.
 - **S5, type SDK: done.** `docs/TYPE-SDK.md`, `pnpm new-type`, and a new built-in `ordering` type as the worked example.
+
+## Next
+
+All five planned phases are built. What remains needs the owner: deploying
+(see [DEPLOY-HOSTINGER.md](DEPLOY-HOSTINGER.md)), clinical sign-off, and
+real keys. Try everything locally first with [LOCAL-TESTING.md](LOCAL-TESTING.md).
 
 ## Waiting on the owner
 

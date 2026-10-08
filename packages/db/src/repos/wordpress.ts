@@ -4,7 +4,6 @@
  * WordPress user id on that connection, never by email (an email match
  * would let a WordPress account take over an existing account).
  */
-import { createHash } from 'node:crypto'
 import type { Db } from '../client'
 import { newId } from '../ids'
 import { toBool } from '../json'
@@ -70,13 +69,13 @@ export async function linkWpUser(db: Db, siteId: string, wpUserId: string, name:
   const existing = await find()
   // Linked before: their membership is whatever an admin made it (removing them is not undone by signing in again).
   if (existing) return existing.user_id
+  // The placeholder email comes from the new account's own id: unique even after the connector moves to another WordPress site.
   const userId = newId()
-  const handle = createHash('sha256').update(`${siteId}:${wpUserId}`).digest('hex').slice(0, 24)
   try {
     await transact(db, async (trx) => {
       await trx
         .insertInto('user')
-        .values({ id: userId, name: (name.trim() || 'WordPress member').slice(0, 100), email: `wp-${handle}@wp.invalid`, emailVerified: false, image: null, createdAt: now, updatedAt: now })
+        .values({ id: userId, name: (name.trim() || 'WordPress member').slice(0, 100), email: `wp-${userId}@wp.invalid`, emailVerified: false, image: null, createdAt: now, updatedAt: now })
         .execute()
       await trx.insertInto('memberships').values({ site_id: siteId, user_id: userId, role: 'learner', created_at: now }).execute()
       await trx.insertInto('wp_users').values({ site_id: siteId, wp_user_id: wpUserId, user_id: userId, created_at: now }).execute()

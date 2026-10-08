@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { SignJWT } from 'jose'
-import { linkWpUser, spendSsoJti } from '@challengeforge/db'
+import { linkWpUser, saveWpConnection, spendSsoJti } from '@challengeforge/db'
 import { verifyWordPressToken } from '../src'
 import { freshDb, setupSite, type TestDb } from '../../db/test/harness'
 
@@ -66,5 +66,24 @@ describe('WordPress sign-on', () => {
     expect(await linkWpUser(t.db, s.site.id, '43', 'Other')).not.toBe(a)
     const user = await t.db.selectFrom('user').select('email').where('id', '=', a).executeTakeFirstOrThrow()
     expect(user.email).toMatch(/@wp\.invalid$/)
+  })
+
+  it('a different WordPress address unlinks the old members, and its user 42 gets a new account', async () => {
+    const { site, admin } = await setupSite(t.db, 'wp-move')
+    await saveWpConnection(t.db, admin, WP, 'sealed-test-secret')
+    const before = await linkWpUser(t.db, site.id, '42', 'Old blog user')
+    await saveWpConnection(t.db, admin, WP, 'sealed-test-secret-2')
+    expect(await linkWpUser(t.db, site.id, '42', 'Same')).toBe(before)
+    await saveWpConnection(t.db, admin, 'https://other-blog.example.test', 'sealed-test-secret-3')
+    const after = await linkWpUser(t.db, site.id, '42', 'New blog user')
+    expect(after).not.toBe(before)
+  })
+
+  it('removing a linked member is not undone by their next sign-on', async () => {
+    const userId = await linkWpUser(t.db, s.site.id, '77', 'Removed later')
+    await t.db.deleteFrom('memberships').where('site_id', '=', s.site.id).where('user_id', '=', userId).execute()
+    expect(await linkWpUser(t.db, s.site.id, '77', 'Removed later')).toBe(userId)
+    const membership = await t.db.selectFrom('memberships').select('role').where('site_id', '=', s.site.id).where('user_id', '=', userId).executeTakeFirst()
+    expect(membership).toBeUndefined()
   })
 })
