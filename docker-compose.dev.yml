@@ -1,5 +1,5 @@
 # Local databases for development and integration tests.
-# Both engines run, because Hostinger may give MariaDB rather than MySQL 8 (PLAN.md §6.1).
+# Both engines run: production (Hostinger) is MariaDB 11.8; MySQL 8 stays supported for other hosts.
 services:
   mysql:
     image: mysql:8.0
@@ -9,7 +9,7 @@ services:
     ports: ["127.0.0.1:33061:3306"]
     tmpfs: ["/var/lib/mysql"]
   mariadb:
-    image: mariadb:10.11
+    image: mariadb:11.8
     environment:
       MARIADB_ROOT_PASSWORD: devroot
       MARIADB_DATABASE: challengeforge

@@ -18,12 +18,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:all
   database:
-    # Hostinger may give MariaDB rather than MySQL 8 (PLAN.md §6.1): test both.
+    # Production (Hostinger) is MariaDB 11.8; 10.11 is the supported floor; MySQL 8 for other hosts.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        image: ['mysql:8.0', 'mariadb:10.11']
+        image: ['mysql:8.0', 'mariadb:10.11', 'mariadb:11.8']
     services:
       db:
         image: ${{ matrix.image }}
@@ -50,11 +50,12 @@ jobs:
     runs-on: ubuntu-latest
     services:
       db:
-        image: mysql:8.0
+        # The engine Hostinger runs in production.
+        image: mariadb:11.8
         env:
-          MYSQL_ROOT_PASSWORD: ciroot
+          MARIADB_ROOT_PASSWORD: ciroot
         ports: ['3306:3306']
-        options: --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pciroot" --health-interval=5s --health-timeout=5s --health-retries=30
+        options: --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -pciroot" --health-interval=5s --health-timeout=5s --health-retries=30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

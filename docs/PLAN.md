@@ -416,7 +416,7 @@ engine binaries; they complicate shared-hosting deploys.
 
   | Question | Finding | Status |
   |---|---|---|
-  | Database engine | Hostinger's own support article says Web and Cloud plans use **MariaDB** (the article is old). Newer guides just say "MySQL databases". | **Confirm with `SELECT VERSION()` in phpMyAdmin.** The design already targets the MySQL ∩ MariaDB subset. |
+  | Database engine | **MariaDB 11.8** (`11.8.9-MariaDB-log`, owner's `SELECT VERSION()`, 2026-10-08). | **Confirmed.** CI tests MariaDB 11.8 (also the E2E engine), MariaDB 10.11 as the floor, and MySQL 8.0 for other hosts. |
   | Node version | 18, 20, 22 (LTS), 24 | OK. Target Node 22. |
   | Process model | Apps run **on demand**: the process stops after idle time and restarts on the next request, and is restarted if it crashes. | This confirms there is **no persistent worker**. In-memory caches and timers are unreliable, so the request-driven jobs + cron design (below) is required. Expect cold starts. |
   | Deploy | Git push to deploy, or archive upload (.zip/.tar.gz); Hostinger runs install + build | Prefer **archive upload of a prebuilt standalone bundle**, because pnpm-workspace support is undocumented. |
