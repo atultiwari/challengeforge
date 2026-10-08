@@ -7,6 +7,8 @@ export default defineConfig({
   // One worker: specs share one database and site-wide settings (pack access, certificates),
   // and the dev server compiles each route on first visit.
   workers: 1,
+  // The dev server compiles each route on first use; on a CI runner that can take well over 5 s.
+  expect: { timeout: 15_000 },
   retries: process.env['CI'] ? 1 : 0,
   use: { baseURL: BASE_URL, trace: 'retain-on-failure' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

@@ -31,7 +31,9 @@ test('an admin makes two authors; one creates a case and adds the other as co-au
   const challengeUrl = new URL(page.url()).pathname
   await page.getByText(/Co-authors \(0\)/).click()
   await page.getByLabel('Add a co-author by email').fill(coauthor.email)
+  const added = page.waitForResponse((r) => r.url().endsWith('/collaborators') && r.request().method() === 'POST')
   await page.getByRole('button', { name: 'Add co-author' }).click()
+  expect((await added).ok()).toBe(true)
   await expect(page.getByText(coauthor.email)).toBeVisible()
 
   await signIn(page, coauthor.email, PASSWORD)
