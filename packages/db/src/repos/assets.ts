@@ -118,13 +118,25 @@ export async function getAssetForPlay(db: Db, scope: Scope, challengeId: string,
  * challenge's data. Accepts the Lab's `{ patients: [...] }`, `{ rows: [...] }`
  * or a bare array. Throws on anything else; the rule then fails closed.
  */
+/** Datasets that grade answers are small tables; anything bigger is refused rather than parsed per request. */
+export const MAX_DATASET_BYTES = 5 * 1024 * 1024
+const DATASET_CACHE_LIMIT = 16
+/** Parsed rows by content hash: assets are immutable per hash, so this is always safe. */
+const datasetCache = new Map<string, readonly DatasetRow[]>()
+
 export function datasetLoaderFor(db: Db, challengeId: string): DatasetLoader {
   return async (ref) => {
-    const row = await db.selectFrom('assets').select('bytes').where('challenge_id', '=', challengeId).where('path', '=', ref).executeTakeFirst()
-    if (!row) throw new Error(`Dataset ${ref} is not an asset of this challenge.`)
+    const meta = await db.selectFrom('assets').select(['sha256', (eb) => eb.fn<number>('length', ['bytes']).as('size')]).where('challenge_id', '=', challengeId).where('path', '=', ref).executeTakeFirst()
+    if (!meta) throw new Error(`Dataset ${ref} is not an asset of this challenge.`)
+    const cached = datasetCache.get(meta.sha256)
+    if (cached) return cached
+    if (Number(meta.size) > MAX_DATASET_BYTES) throw new Error(`Dataset ${ref} is too large to grade with.`)
+    const row = await db.selectFrom('assets').select('bytes').where('challenge_id', '=', challengeId).where('path', '=', ref).executeTakeFirstOrThrow()
     const parsed = JSON.parse(row.bytes.toString('utf8')) as unknown
     const rows = Array.isArray(parsed) ? parsed : ((parsed as { patients?: unknown; rows?: unknown }).patients ?? (parsed as { rows?: unknown }).rows)
     if (!Array.isArray(rows) || rows.length === 0) throw new Error(`Dataset ${ref} has no rows.`)
+    datasetCache.set(meta.sha256, rows as DatasetRow[])
+    if (datasetCache.size > DATASET_CACHE_LIMIT) datasetCache.delete(datasetCache.keys().next().value as string)
     return rows as DatasetRow[]
   }
 }

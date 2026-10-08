@@ -50,7 +50,8 @@ describe('actions that need a model', () => {
     }
     const r = await performAction(t.db, who, deps, attemptId, { kind: 'send', text: 'hello' }, { idempotencyKey: 'k1' })
     expect(r).toMatchObject({ ok: true, snapshot: { view: { transcript: [{ role: 'user', content: 'hello' }, { role: 'assistant', content: 'canned reply' }] } } })
-    expect(pendingSeenDuringCall).toBe('k1')
+    // Parked under a fresh server token, never the client's idempotency key.
+    expect(pendingSeenDuringCall).toMatch(/^call:/)
     const event = await t.db.selectFrom('attempt_events').selectAll().where('attempt_id', '=', attemptId).executeTakeFirstOrThrow()
     expect(event.seq).toBe(1)
     const row = await t.db.selectFrom('attempts').select(['pending_action', 'pending_key']).where('id', '=', attemptId).executeTakeFirstOrThrow()
@@ -106,5 +107,51 @@ describe('actions that need a model', () => {
     await performAction(t.db, who, deps, attemptId, { kind: 'send', text: 'break it' })
     const done = await performAction(t.db, who, deps, attemptId, { kind: 'finish' })
     expect(done).toMatchObject({ ok: true, snapshot: { status: 'terminal', assessment: { passed: true, points: 100 } } })
+  })
+})
+
+describe('stale calls never touch a newer action (review H1, H2)', () => {
+  it('a call that outlives its window, then fails, does not clear the action parked after it', async () => {
+    const who = await createUser(t.db, s.site.id, 'learner', 'stale-fail')
+    const { attemptId } = await startOrResume(t.db, who, { registry }, challengeId)
+    let clock = new Date('2026-10-08T10:00:00Z')
+    let releaseA: (v?: unknown) => void = () => undefined
+    let releaseB: (v?: unknown) => void = () => undefined
+    const depsA: AttemptDeps = { registry, now: () => clock, runService: () => new Promise((_, reject) => { releaseA = reject }), onError: () => undefined }
+    const a = performAction(t.db, who, depsA, attemptId, { kind: 'send', text: 'A' })
+    await vi.waitFor(async () => expect((await t.db.selectFrom('attempts').select('pending_since').where('id', '=', attemptId).executeTakeFirstOrThrow()).pending_since).not.toBeNull())
+    clock = new Date(clock.getTime() + 3 * 60_000) // A's window expires
+    const depsB: AttemptDeps = { registry, now: () => clock, runService: () => new Promise((resolve) => { releaseB = () => resolve({ text: 'B reply' }) }) }
+    const b = performAction(t.db, who, depsB, attemptId, { kind: 'send', text: 'B' })
+    await vi.waitFor(async () => {
+      const row = await t.db.selectFrom('attempts').select('pending_action').where('id', '=', attemptId).executeTakeFirstOrThrow()
+      expect(JSON.stringify(row.pending_action)).toContain('B')
+    })
+    releaseA(new Error('A failed late'))
+    expect(await a).toMatchObject({ ok: false })
+    // B is still parked: a third action must be refused while B runs.
+    expect(await performAction(t.db, who, { registry, now: () => clock, runService: runner() }, attemptId, { kind: 'send', text: 'C' })).toMatchObject({ ok: false, error: { code: 'busy' } })
+    releaseB()
+    expect(await b).toMatchObject({ ok: true, snapshot: { view: { transcript: [{ content: 'B' }, { content: 'B reply' }] } } })
+  })
+
+  it('a stale successful result is never applied as a newer action\'s result', async () => {
+    const who = await createUser(t.db, s.site.id, 'learner', 'stale-ok')
+    const { attemptId } = await startOrResume(t.db, who, { registry }, challengeId)
+    let clock = new Date('2026-10-08T10:00:00Z')
+    let releaseA: () => void = () => undefined
+    const depsA: AttemptDeps = { registry, now: () => clock, runService: () => new Promise((resolve) => { releaseA = () => resolve({ text: 'A reply' }) }) }
+    const a = performAction(t.db, who, depsA, attemptId, { kind: 'send', text: 'A' })
+    await vi.waitFor(async () => expect((await t.db.selectFrom('attempts').select('pending_since').where('id', '=', attemptId).executeTakeFirstOrThrow()).pending_since).not.toBeNull())
+    clock = new Date(clock.getTime() + 3 * 60_000)
+    let releaseB: () => void = () => undefined
+    const depsB: AttemptDeps = { registry, now: () => clock, runService: () => new Promise((resolve) => { releaseB = () => resolve({ text: 'B reply' }) }) }
+    const b = performAction(t.db, who, depsB, attemptId, { kind: 'send', text: 'B' })
+    await vi.waitFor(async () => expect(JSON.stringify((await t.db.selectFrom('attempts').select('pending_action').where('id', '=', attemptId).executeTakeFirstOrThrow()).pending_action)).toContain('B'))
+    releaseA()
+    expect(await a).toMatchObject({ ok: false, error: { code: 'busy' } })
+    releaseB()
+    const done = await b
+    expect(done).toMatchObject({ ok: true, snapshot: { view: { transcript: [{ content: 'B' }, { content: 'B reply' }] } } })
   })
 })

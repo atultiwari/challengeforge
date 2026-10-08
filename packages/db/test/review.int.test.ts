@@ -57,6 +57,12 @@ describe('review queue', () => {
     expect((await listReviewQueue(t.db, s.admin)).map((r) => r.attemptId)).not.toContain(attemptId)
   })
 
+  it('a result that is not waiting for review cannot be silently rewritten', async () => {
+    const { attemptId } = await finishedAttempt('final')
+    await overrideAssessment(t.db, s.admin, attemptId, { passed: false, points: 0 })
+    await expect(overrideAssessment(t.db, s.admin, attemptId, { passed: true, points: 100 })).rejects.toMatchObject({ code: 'not_found' })
+  })
+
   it('only admins of the same site may review', async () => {
     const { attemptId } = await finishedAttempt('protected')
     await expect(listReviewQueue(t.db, s.author)).rejects.toMatchObject({ code: 'forbidden' })

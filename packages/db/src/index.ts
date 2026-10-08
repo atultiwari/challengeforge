@@ -6,6 +6,7 @@ export { migrateToLatest, migrateDownAll, type MigrationReport } from './migrate
 export * from './repos/sites'
 export * from './repos/content'
 export * from './repos/attempts'
+export * from './repos/attempt-actions'
 export * from './repos/assets'
 export * from './import-pack'
 export * from './repos/llm-store'

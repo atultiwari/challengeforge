@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { mysqlLlmStore } from '../src'
+import { closeStaleReservations, mysqlLlmStore, STALE_RESERVATION_MS } from '../src'
 import { freshDb, setupSite, type TestDb } from './harness'
 
 let t: TestDb
@@ -35,6 +35,20 @@ describe('MySQL LlmStore', () => {
     })
     expect((await reserve(2, 'judge')).reservationId).not.toBeNull()
     expect((await reserve(2, 'judge')).reservationId).toBeNull()
+  })
+
+  it('closes reservations that never reported back, keeping their slot used', async () => {
+    const live = await reserve(5, 'stale', 'c-stale')
+    const later = new Date(Date.now() + STALE_RESERVATION_MS + 60_000)
+    const old = await reserve(5, 'stale', 'c-stale')
+    await t.db.updateTable('llm_usage').set({ created_at: new Date(Date.now() - STALE_RESERVATION_MS - 60_000) }).where('id', '=', old.reservationId!).execute()
+    expect(await closeStaleReservations(t.db)).toBe(1)
+    const rows = await t.db.selectFrom('llm_usage').select(['id', 'status']).where('challenge_id', '=', 'c-stale').execute()
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.status]))).toEqual({ [live.reservationId!]: 'reserved', [old.reservationId!]: 'completed' })
+    expect((await reserve(5, 'stale', 'c-stale')).callsUsed).toBe(3)
+    await closeStaleReservations(t.db, later)
+    const after = await t.db.selectFrom('llm_usage').select('status').where('challenge_id', '=', 'c-stale').execute()
+    expect(after.map((r) => r.status)).toEqual(['completed', 'completed', 'completed'])
   })
 
   it('caps are per user, challenge and purpose', async () => {

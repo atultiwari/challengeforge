@@ -79,7 +79,7 @@ export interface Override {
   points: number
 }
 
-/** An admin confirms or overturns a result; it is marked overridden with the reviewer recorded. */
+/** An admin confirms or overturns a result waiting for review; it is marked overridden with the reviewer recorded. */
 export async function overrideAssessment(db: Db, scope: Scope, attemptId: string, override: Override): Promise<void> {
   const admin = requireRole(scope, 'admin')
   const attempt = await db
@@ -88,8 +88,10 @@ export async function overrideAssessment(db: Db, scope: Scope, attemptId: string
     .select(['attempts.user_id as userId', 'attempts.challenge_id as challengeId'])
     .where('attempts.id', '=', attemptId)
     .where('attempts.site_id', '=', scope.siteId)
+    // Only results waiting for review: a final result cannot be silently rewritten.
+    .where('assessments.status', '=', 'pending_review')
     .executeTakeFirst()
-  if (!attempt) throw new NotFoundError('Result not found.')
+  if (!attempt) throw new NotFoundError('No result is waiting for review here.')
   const points = Math.max(0, Math.round(override.points))
   await db.transaction().execute(async (trx) => {
     await trx

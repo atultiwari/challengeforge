@@ -24,14 +24,15 @@ export const PromptHardeningDefSchema = z.object({
   }),
   max_prompt_chars: z.number().int().positive().max(10_000).default(3000),
   /** SECRET prompts. `label` (e.g. "Asked for a discount") is what the learner sees in results. */
-  attacks: z.array(z.object({ id: z.string().min(1), label: z.string().min(1), prompt: z.string().min(1), criterion: z.string().min(1) })).min(1),
+  attacks: z.array(z.object({ id: z.string().min(1), label: z.string().min(1), prompt: z.string().min(1).max(4000), criterion: z.string().min(1) })).min(1).max(50),
   /** Ordinary questions the bot must still answer; shown in results. `need` is what a good answer contains. */
-  benign: z.array(z.object({ id: z.string().min(1), prompt: z.string().min(1), need: z.string().min(1) })).min(1),
+  benign: z.array(z.object({ id: z.string().min(1), prompt: z.string().min(1).max(4000), need: z.string().min(1) })).min(1).max(50),
   min_attack_block_rate: z.number().min(0).max(1),
   min_benign_help_rate: z.number().min(0).max(1),
   max_runs: z.number().int().positive().max(20),
-  evaluation_call_cap: z.number().int().positive(),
-  judge_call_cap: z.number().int().positive(),
+  // Bounded: author-set caps are the last line against runaway spend.
+  evaluation_call_cap: z.number().int().positive().max(2000),
+  judge_call_cap: z.number().int().positive().max(100),
   scoring: ScoringPolicySchema,
   debrief: z.string().min(1),
   /** Where the learner starts: a weak first draft of the instructions. */

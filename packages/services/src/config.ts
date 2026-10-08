@@ -26,6 +26,10 @@ export function servicesConfigFromEnv(env: Record<string, string | undefined>): 
     throw new Error(`Invalid model configuration - ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)
   }
   const e = parsed.data
+  // The mock answers with canned replies (and happily leaks its prompt): never on a live site by accident.
+  if (e.LLM_MODE === 'mock' && env['NODE_ENV'] === 'production' && env['ALLOW_MOCK_LLM_IN_PRODUCTION'] !== 'true') {
+    throw new Error('LLM_MODE is "mock" in production. Set LLM_MODE=live with provider keys, or ALLOW_MOCK_LLM_IN_PRODUCTION=true for a demo site.')
+  }
   return {
     gateway: parseGatewayConfig({
       llmMock: e.LLM_MODE === 'mock',

@@ -14,12 +14,20 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { Command } from 'commander'
-import { advanceJob, createDb, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
+import { advanceJob, closeStaleReservations, createDb, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
 import { createServiceRunners, servicesConfigFromEnv } from '@challengeforge/services'
 import { registry } from '@challengeforge/types'
 import { loadConfig } from './config'
 import { loadPackFromDirectory } from './pack-loader'
 import { createUserWithPassword, resetPassword } from './users'
+
+/** The nearest enclosing git work tree, if any. */
+function gitWorkTreeOf(start: string): string | null {
+  for (let dir = start; ; dir = path.dirname(dir)) {
+    if (existsSync(path.join(dir, '.git'))) return dir
+    if (path.dirname(dir) === dir) return null
+  }
+}
 
 /** The CLI acts as the system operator, with admin rights on the configured site. */
 const systemScope = (siteId: string): Scope => ({ siteId, principal: { userId: 'system:cli', role: 'admin' } })
@@ -126,7 +134,8 @@ program
           slices += 1
         }
       }
-      process.stdout.write(`Advanced ${slices} job slices.\n`)
+      const closed = await closeStaleReservations(db)
+      process.stdout.write(`Advanced ${slices} job slices; closed ${closed} stale AI call reservations.\n`)
     }),
   )
 
@@ -134,9 +143,15 @@ program
   .command('export-pack')
   .argument('<slug>', 'pack slug, e.g. clinical-ai')
   .argument('<dir>', 'an empty or new directory to write the pack to')
-  .description('Export a pack (latest version of each challenge, sections, assets) for import elsewhere')
-  .action((slug: string, dir: string) =>
+  .option('--allow-in-repo', 'write inside a git work tree anyway (the export contains answer keys)')
+  .description('Export a pack (published version of each challenge, sections, assets) for import elsewhere')
+  .action((slug: string, dir: string, options: { allowInRepo?: boolean }) =>
     withDb(async (db, config) => {
+      // An export holds answer keys and hidden prompts: never drop one into a (possibly public) repo by accident.
+      const repo = gitWorkTreeOf(path.resolve(dir))
+      if (repo && !path.resolve(dir).startsWith(path.join(repo, 'packs') + path.sep) && !options.allowInRepo) {
+        throw new Error(`${dir} is inside the git work tree ${repo}. Exports contain answer keys: write outside it, under ${path.join(repo, 'packs')}, or pass --allow-in-repo.`)
+      }
       const site = await ensureSite(db, config.siteSlug, config.siteName)
       const files = exportFiles(await exportPack(db, systemScope(site.id), slug))
       const root = path.resolve(dir)

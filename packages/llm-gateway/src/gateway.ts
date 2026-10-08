@@ -1,6 +1,7 @@
 import { assertPlatformBudget, reserveChallengeCall } from './caps'
 import type { GatewayConfig } from './config'
 import { resolveCredential } from './credentials/resolve'
+import { LlmUserFacingError } from './errors'
 import type { ResolvedCredential } from './credentials/resolve'
 import { MOCK_CONFIG, mockProvider } from './providers/mock'
 import { createProviderRegistry } from './providers/registry'
@@ -154,7 +155,15 @@ export async function complete(call: GatewayCall, deps: GatewayDeps): Promise<Ga
   const target = await route(call, deps, registry)
   const { credential } = target
 
-  // 2. Financial cap, only for learner-driven calls the platform is paying for.
+  // 2. Financial safety, for calls the platform pays for. A model with no
+  //    configured price could never be counted against any budget, so it is
+  //    refused outright (an author or pack cannot pin an unbounded model).
+  if (credential.source === 'platform' && !config.llmMock) {
+    const price = registry.modelPricing(target.provider, target.model)
+    if (price.inputUsdPerMTok === null || price.outputUsdPerMTok === null) {
+      throw new LlmUserFacingError('This challenge uses an AI model this site has not approved. Please tell the site administrator.', 'model_not_allowed')
+    }
+  }
   if (credential.source === 'platform' && !platformOnly) {
     await assertPlatformBudget(store, call.userId, config.platformBudgetUsdPerUser)
   }
@@ -173,7 +182,8 @@ export async function complete(call: GatewayCall, deps: GatewayDeps): Promise<Ga
   // 4. The call itself.
   const response = await callWithRetry(call, target, store, reservationId, deps.sleep ?? realSleep)
 
-  // 5. Log every call, whoever paid, so cost measurement works.
+  // 5. Log every call, whoever paid, so cost measurement works. A logging
+  //    failure must not throw away an answer that has already been paid for.
   await store.completeCall(reservationId, {
     userId: call.userId,
     challengeId: call.challengeId,
@@ -188,7 +198,7 @@ export async function complete(call: GatewayCall, deps: GatewayDeps): Promise<Ga
       ? 0
       : registry.estimateCostUsd(call.provider, call.model, response.inputTokens, response.outputTokens),
     requestId: response.requestId,
-  })
+  }).catch((err: unknown) => console.error('[llm-gateway] could not log a completed call', err))
 
   return {
     ...response,

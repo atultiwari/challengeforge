@@ -13,6 +13,7 @@ import { QuestionSetPlayer } from './QuestionSetPlayer'
 const PLAYABLE_TYPES = new Set(['lab-legacy', 'question-set', 'diagnostic-sim', 'chat-mission', 'prompt-hardening'])
 /** How often the page advances a background job (each call runs one bounded slice). */
 const JOB_POLL_MS = 1500
+const MAX_POLL_FAILURES = 6
 
 export type SendAction = (action: Record<string, unknown>) => Promise<boolean>
 
@@ -65,10 +66,18 @@ export function Player({ challengeId, title, preview, initial }: Props) {
   useEffect(() => {
     if (!jobId) return
     let stopped = false
+    let failures = 0
     const tick = async () => {
       const r = await postJson<{ status: string; error: string | null; snapshot: AttemptSnapshot }>(`/api/jobs/${jobId}/advance`, {})
       if (stopped) return
-      if (!r.ok) return setError(r.error.message)
+      if (!r.ok) {
+        // A blip (network, a host restart) must not strand the page: keep trying, more slowly, for a while.
+        failures += 1
+        if (failures >= MAX_POLL_FAILURES) return setError(r.error.message)
+        timer = setTimeout(tick, JOB_POLL_MS * 2 ** failures)
+        return
+      }
+      failures = 0
       setSnapshot(r.data.snapshot)
       if (r.data.status === 'failed') setError(r.data.error ?? 'The evaluation could not be completed.')
       else if (r.data.status !== 'done') timer = setTimeout(tick, JOB_POLL_MS)

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { canonicalJson, ensureSite, exportPack, importPack, saveDraftVersion, type LoadedPack, type Scope } from '../src'
+import { canonicalJson, ensureSite, exportPack, importPack, publish, saveDraftVersion, type LoadedPack, type Scope } from '../src'
 import { createUser, freshDb, registry, setupSite, type TestDb } from './harness'
 import { quizMission } from './fixtures'
 
@@ -37,13 +37,16 @@ beforeAll(async () => {
 afterAll(async () => t.close())
 
 describe('exportPack', () => {
-  it('writes the latest version of every challenge, with sections and assets', async () => {
+  it('writes the PUBLISHED version of every challenge (never an unreviewed draft), with sections and assets', async () => {
     const id = (await t.db.selectFrom('challenges').select('id').where('slug', '=', 'rt-quiz').executeTakeFirstOrThrow()).id
-    await saveDraftVersion(t.db, s.admin, registry, id, { ...quizMission, title: 'Edited after import' })
+    await saveDraftVersion(t.db, s.admin, registry, id, { ...quizMission, title: 'Unreviewed draft' })
     const exported = await exportPack(t.db, s.admin, 'round-trip')
+    expect((exported.readJson('challenges/rt-quiz.json') as { title: string }).title).toBe(quizMission.title)
+    await publish(t.db, s.admin, id)
+    const republished = await exportPack(t.db, s.admin, 'round-trip')
     expect(exported.manifest).toMatchObject({ format: 1, slug: 'round-trip', sections: [{ slug: 'one', title: 'One' }], challenges: [{ slug: 'rt-quiz', type: 'lab-legacy@1' }] })
-    expect((exported.readJson('challenges/rt-quiz.json') as { title: string }).title).toBe('Edited after import')
-    expect(exported.readBytes(exported.manifest.challenges[0]!.assets[0]!.file).toString()).toBe('{"rows":[1,2,3]}')
+    expect((republished.readJson('challenges/rt-quiz.json') as { title: string }).title).toBe('Unreviewed draft')
+    expect(republished.readBytes(republished.manifest.challenges[0]!.assets[0]!.file).toString()).toBe('{"rows":[1,2,3]}')
   })
 
   it('round-trips: importing the export into another site reproduces the same definitions', async () => {

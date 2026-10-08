@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { advanceJob, createChallenge, getJob, listRunnableJobIds, performAction, publish, startOrResume, type AttemptDeps, type JobSliceRunner } from '../src'
 import { createUser, freshDb, registry, setupSite, type TestDb } from './harness'
 
@@ -87,9 +87,14 @@ describe('background jobs', () => {
   })
 
   it('a job that keeps failing is marked failed and frees the attempt', async () => {
-    const broken: AttemptDeps = { registry, runJobSlice: async () => { throw new Error('provider down') }, onError: () => undefined }
+    let clock = Date.now()
+    // Each failure backs off before the next try; move the clock past the backoff each time.
+    const broken: AttemptDeps = { registry, now: () => new Date(clock), runJobSlice: async () => { throw new Error('provider down') }, onError: () => undefined }
     const { who, attemptId, jobId } = await queued('failer', broken)
-    for (let i = 0; i < 3; i += 1) await advanceJob(t.db, broken, jobId)
+    for (let i = 0; i < 3; i += 1) {
+      await advanceJob(t.db, broken, jobId)
+      clock += 5 * 60_000
+    }
     expect(await getJob(t.db, who, jobId)).toMatchObject({ status: 'failed' })
     expect(await performAction(t.db, who, broken, attemptId, { kind: 'save_prompt', text: 'try again' })).toMatchObject({ ok: true })
   })
@@ -99,5 +104,34 @@ describe('background jobs', () => {
     const { jobId } = await queued('cronned', deps)
     expect(await listRunnableJobIds(t.db, 50)).toContain(jobId)
     await expect(getJob(t.db, s.otherLearner, jobId)).rejects.toMatchObject({ code: 'not_found' })
+  })
+})
+
+describe('job robustness (review H3, M1)', () => {
+  it('marking a job done is part of applying its result: a crash in between cannot strand it', async () => {
+    const deps: AttemptDeps = { registry, runJobSlice: async () => ({ done: true, result: passingReport }) }
+    const { jobId, attemptId } = await queued('atomic', deps)
+    await advanceJob(t.db, deps, jobId)
+    const job = await t.db.selectFrom('jobs').select('status').where('id', '=', jobId).executeTakeFirstOrThrow()
+    const attempt = await t.db.selectFrom('attempts').select(['status', 'pending_key']).where('id', '=', attemptId).executeTakeFirstOrThrow()
+    expect(job.status).toBe('done')
+    expect(attempt).toEqual({ status: 'terminal', pending_key: null })
+  })
+
+  it('a worker whose lease was taken over cannot write its stale progress', async () => {
+    let clock = new Date('2026-10-08T10:00:00Z')
+    let release: () => void = () => undefined
+    const slow: JobSliceRunner = () => new Promise((resolve) => { release = () => resolve({ done: false, progress: { done: 1, from: 'stale' } }) })
+    const deps: AttemptDeps = { registry, now: () => clock, runJobSlice: slow }
+    const { jobId } = await queued('lease', deps)
+    const first = advanceJob(t.db, deps, jobId)
+    await vi.waitFor(async () => expect((await t.db.selectFrom('jobs').select('lease_until').where('id', '=', jobId).executeTakeFirstOrThrow()).lease_until).not.toBeNull())
+    clock = new Date(clock.getTime() + 10 * 60_000) // lease expired: another worker takes over
+    const second: AttemptDeps = { registry, now: () => clock, runJobSlice: async () => ({ done: false, progress: { done: 2, from: 'fresh' } }) }
+    await advanceJob(t.db, second, jobId)
+    release()
+    await first
+    const job = await t.db.selectFrom('jobs').select('progress').where('id', '=', jobId).executeTakeFirstOrThrow()
+    expect(JSON.stringify(job.progress)).toContain('fresh')
   })
 })

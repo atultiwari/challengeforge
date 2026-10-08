@@ -257,9 +257,9 @@ describe('usage logging', () => {
     expect(store.logged[0]?.credentialSource).toBe('byok')
   })
 
-  it('records a null cost for a model with no price rather than guessing', async () => {
+  it('records a null cost for a model with no price rather than guessing (learner-paid: platform calls refuse it)', async () => {
     mockProviderOk()
-    const store = fakeStore()
+    const store = learnerKeyStore()
     await run({ ...call, model: 'claude-unpriced-test' }, store)
     expect(store.logged[0]?.costEstimateUsd).toBeNull()
   })
@@ -337,5 +337,28 @@ describe('summariseProviderError', () => {
 
   it('caps a long non-JSON body', () => {
     expect(summariseProviderError('x'.repeat(1000))).toHaveLength(301)
+  })
+})
+
+describe('spend safety (Phase 2 security review)', () => {
+  it('refuses a platform-paid call to a model with no configured price, before reserving anything', async () => {
+    const store = fakeStore()
+    const fetchMock = mockProviderOk()
+    await expect(run({ ...call, model: 'some-expensive-unlisted-model' }, store)).rejects.toMatchObject({ code: 'model_not_allowed' })
+    expect(store.reserved).toHaveLength(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('lets a learner use an unlisted model on their OWN key: they pay', async () => {
+    mockProviderOk()
+    const store = learnerKeyStore()
+    await expect(run({ ...call, model: 'some-unlisted-model' }, store)).resolves.toMatchObject({ credentialSource: 'byok' })
+  })
+
+  it('still returns the reply when logging the usage fails (and does not lose the paid-for answer)', async () => {
+    mockProviderOk('the answer')
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const store = fakeStore({ completeCall: async () => { throw new Error('db hiccup') } })
+    await expect(run(call, store)).resolves.toMatchObject({ text: 'the answer' })
   })
 })

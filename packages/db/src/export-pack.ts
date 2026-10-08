@@ -1,7 +1,9 @@
 /**
- * Pack export: the latest version of every challenge in a pack, its sections
- * and its assets, in the same format `importPack` reads, so content moves
- * between installations (PLAN.md §3.7). Data only, never code.
+ * Pack export: the PUBLISHED version of every live challenge in a pack (a
+ * challenge never published exports its latest draft, so authoring work can
+ * still move), its sections and its assets, in the format `importPack`
+ * reads (PLAN.md §3.7). Archived challenges are left out. Data only, never code.
+ * Read in one transaction, so the export is a consistent snapshot.
  */
 import type { Db } from './client'
 import type { LoadedPack, PackManifest } from './import-pack'
@@ -16,16 +18,30 @@ const assetFile = (challengeIndex: number, assetIndex: number, path: string): st
 
 export async function exportPack(db: Db, scope: Scope, packSlug: string): Promise<LoadedPack> {
   requireRole(scope, 'admin')
+  return db.transaction().execute((trx) => exportInside(trx, scope, packSlug))
+}
+
+async function exportInside(db: Db, scope: Scope, packSlug: string): Promise<LoadedPack> {
   const pack = await db.selectFrom('packs').selectAll().where('site_id', '=', scope.siteId).where('slug', '=', packSlug).executeTakeFirst()
   if (!pack) throw new NotFoundError(`No pack "${packSlug}" on this site.`)
   const sections = await db.selectFrom('pack_sections').selectAll().where('pack_id', '=', pack.id).orderBy('position').execute()
-  const challenges = await db.selectFrom('challenges').selectAll().where('pack_id', '=', pack.id).where('site_id', '=', scope.siteId).orderBy('position').execute()
+  const challenges = await db
+    .selectFrom('challenges')
+    .selectAll()
+    .where('pack_id', '=', pack.id)
+    .where('site_id', '=', scope.siteId)
+    .where('status', '!=', 'archived')
+    .orderBy('position')
+    .execute()
 
   const json = new Map<string, unknown>()
   const bytes = new Map<string, Buffer>()
   const entries: PackManifest['challenges'] = []
   for (const [i, c] of challenges.entries()) {
-    const latest = await db.selectFrom('challenge_versions').select('definition').where('challenge_id', '=', c.id).orderBy('version', 'desc').limit(1).executeTakeFirstOrThrow()
+    const versionQuery = db.selectFrom('challenge_versions').select('definition').where('challenge_id', '=', c.id)
+    const latest = c.published_version_id
+      ? await versionQuery.where('id', '=', c.published_version_id).executeTakeFirstOrThrow()
+      : await versionQuery.orderBy('version', 'desc').limit(1).executeTakeFirstOrThrow()
     const definitionFile = `challenges/${c.slug}.json`
     json.set(definitionFile, fromJson(latest.definition))
     const assets = await db.selectFrom('assets').select(['path', 'content_type', 'visibility', 'bytes']).where('challenge_id', '=', c.id).orderBy('path').execute()

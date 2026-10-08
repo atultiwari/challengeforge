@@ -36,6 +36,8 @@ writeFileSync(path.join(out, 'package.json'), `${JSON.stringify({ name: 'challen
 writeFileSync(
   path.join(out, 'server.js'),
   [
+    "// Always production: the test-only switches and the mock model refuse to run in it.",
+    "process.env.NODE_ENV = 'production'",
     "import path from 'node:path'",
     "import { fileURLToPath } from 'node:url'",
     "process.chdir(path.join(path.dirname(fileURLToPath(import.meta.url)), 'packages/web'))",

@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import { NumberField } from '../NumberField'
 import {
   defaultFor,
@@ -131,10 +132,14 @@ function ArrayField({ name, schema, value, path, issues, onChange }: FieldProps)
       <Help schema={schema} />
       <FieldIssues issues={issues} path={path} />
       {items.map((item, i) => (
-        <details key={i} className="rounded-md border border-line bg-surface" open={items.length <= 2}>
+        // Keyed by the item's own id when it has one, so reordering keeps each card's open/closed state.
+        <details key={typeof (item as { id?: unknown })?.id === 'string' ? `id:${(item as { id: string }).id}` : `i:${i}`} className="rounded-md border border-line bg-surface" open={items.length <= 2}>
           <summary className="flex cursor-pointer items-center gap-2 px-3 py-2">
             <span className="mr-auto font-semibold">{summaryOf(item) || `${humanize(name)} ${i + 1}`}</span>
-            {issues.some((x) => x.path.startsWith(`${[...path, i].join('.')}`)) && <span className="pill bg-danger-soft text-danger">check</span>}
+            {issues.some((x) => {
+              const card = [...path, i].join('.')
+              return x.path === card || x.path.startsWith(`${card}.`)
+            }) && <span className="pill bg-danger-soft text-danger">check</span>}
           </summary>
           <div className="space-y-3 border-t border-line px-3 py-3">
             <SchemaField name={name} schema={itemSchema} value={item} path={[...path, i]} issues={issues} onChange={onChange} />
@@ -155,6 +160,32 @@ function ArrayField({ name, schema, value, path, issues, onChange }: FieldProps)
   )
 }
 
+/**
+ * A map key edited as text and committed on blur: renaming mid-typing to a
+ * name another row already has would silently overwrite that row, so it is refused.
+ */
+function MapKeyInput({ value, taken, onRename }: { value: string; taken: readonly string[]; onRename: (next: string) => void }) {
+  const [draft, setDraft] = useState(value)
+  const clash = draft.trim() !== value && taken.includes(draft.trim())
+  return (
+    <span>
+      <input
+        className="field-input"
+        value={draft}
+        aria-label="Name"
+        aria-invalid={clash}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const next = draft.trim()
+          if (next === '' || clash) setDraft(value)
+          else if (next !== value) onRename(next)
+        }}
+      />
+      {clash && <span className="text-xs text-danger">Another row already has this name.</span>}
+    </span>
+  )
+}
+
 /** A name → value map (e.g. vitals: "Heart rate" → "118 /min"), edited as rows. */
 function MapField({ name, schema, value, path, issues, onChange }: FieldProps) {
   const map = (value ?? {}) as Record<string, unknown>
@@ -164,12 +195,11 @@ function MapField({ name, schema, value, path, issues, onChange }: FieldProps) {
       <legend className="px-1 font-semibold">{schema.title ?? humanize(name)}</legend>
       <Help schema={schema} />
       {entries.map(([key, v], i) => (
-        <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-          <input
-            className="field-input"
+        <div key={key} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+          <MapKeyInput
             value={key}
-            aria-label="Name"
-            onChange={(e) => onChange(path, renameKey(map, key, e.target.value))}
+            taken={entries.map(([k]) => k).filter((k) => k !== key)}
+            onRename={(next) => onChange(path, renameKey(map, key, next))}
           />
           <input className="field-input" value={String(v ?? '')} aria-label={`Value for ${key}`} onChange={(e) => onChange(path, { ...map, [key]: e.target.value })} />
           <button type="button" className="text-sm text-danger" onClick={() => onChange(path, Object.fromEntries(entries.filter(([k]) => k !== key)))}>
@@ -177,7 +207,16 @@ function MapField({ name, schema, value, path, issues, onChange }: FieldProps) {
           </button>
         </div>
       ))}
-      <button type="button" className="btn-secondary" onClick={() => onChange(path, { ...map, [`New ${entries.length + 1}`]: '' })}>
+      <button
+        type="button"
+        className="btn-secondary"
+        onClick={() => {
+          // A fresh name that no row has, even after rows were removed.
+          let n = entries.length + 1
+          while (`New ${n}` in map) n += 1
+          onChange(path, { ...map, [`New ${n}`]: '' })
+        }}
+      >
         Add a row
       </button>
       <FieldIssues issues={issues} path={path} />

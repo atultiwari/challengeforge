@@ -200,3 +200,21 @@ export function mysqlLlmStore(db: Db, siteId: string): MysqlLlmStore {
     },
   }
 }
+
+/** A reservation this old is from a call that never reported back (a crash or a killed request). */
+export const STALE_RESERVATION_MS = 15 * 60_000
+
+/**
+ * Closes reservations whose call never completed, across all sites. The slot
+ * stays used (the provider may have been charged), so a crash never hands out
+ * a free call; the row just stops looking in-flight. Returns how many closed.
+ */
+export async function closeStaleReservations(db: Db, now: Date = new Date()): Promise<number> {
+  const result = await db
+    .updateTable('llm_usage')
+    .set({ status: 'completed', updated_at: now })
+    .where('status', '=', 'reserved')
+    .where('created_at', '<', new Date(now.getTime() - STALE_RESERVATION_MS))
+    .executeTakeFirst()
+  return Number(result.numUpdatedRows)
+}

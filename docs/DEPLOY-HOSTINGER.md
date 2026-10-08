@@ -57,6 +57,10 @@ pnpm release
 | `SITE_SLUG` | `main` |
 | `SITE_NAME` | the name shown in the header |
 | `DB_CONNECTION_LIMIT` | `5`. Shared plans cap connections. |
+| `LLM_MODE` | `live` to call real AI providers. A production site refuses to start on `mock` (canned replies) unless `ALLOW_MOCK_LLM_IN_PRODUCTION=true`, which is for demo sites only. |
+| `GOOGLE_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | Keys for the providers your AI missions pin. Needed only with `LLM_MODE=live`. Only models with a price in the provider configuration may run on the site's keys. |
+| `LLM_BUDGET_USD_PER_USER` | Spend cap per learner on the site's keys. Default `2`. |
+| `BYOK_ENCRYPTION_KEY` | Optional. Generate with `openssl rand -base64 32`; it lets learners use their own API keys. |
 
 ## 4. First-time setup (hPanel → Advanced → SSH access)
 

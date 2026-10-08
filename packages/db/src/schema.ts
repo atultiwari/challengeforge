@@ -244,6 +244,7 @@ export interface JobsTable {
   error: string | null
   failures: number
   lease_until: NullableTimestamp
+  lease_token: string | null
   created_at: Timestamp
   updated_at: Timestamp
 }

@@ -46,7 +46,8 @@ export function createServiceRunners(db: Db, config: ServicesConfig): { runServi
   const providers = createProviderRegistry()
   const call = (context: Context, c: Omit<GatewayCall, 'userId' | 'challengeId'>) =>
     complete({ ...c, userId: context.userId, challengeId: context.challengeId }, { store: mysqlLlmStore(db, context.siteId), config: config.gateway, providers }).catch(userFacing)
-  const canaryFor = (context: Context) => deriveCanary(context.userId, context.challengeId, config.canarySecret)
+  // Per ATTEMPT: a canary seen in one attempt is useless in the next.
+  const canaryFor = (context: Context) => deriveCanary(context.userId, `${context.challengeId}:${context.attemptId}`, config.canarySecret)
 
   const runService: ServiceRunner = async (request, context) => {
     const canary = canaryFor(context)
@@ -74,7 +75,15 @@ export function createServiceRunners(db: Db, config: ServicesConfig): { runServi
         })
         return parseJudgeVerdict(judged.text)
       }
-      return evaluateRule(p.rule, {}, { challengeId: context.challengeId, userId: context.userId, transcript: p.transcript, canary, judge })
+      // If the learner typed the canary themselves, the bot repeating it proves nothing: no canary credit.
+      const typedByLearner = p.transcript.some((t) => t.role === 'user' && t.content.toLowerCase().includes(canary.toLowerCase()))
+      return evaluateRule(p.rule, {}, {
+        challengeId: context.challengeId,
+        userId: context.userId,
+        transcript: p.transcript,
+        judge,
+        ...(typedByLearner ? {} : { canary }),
+      })
     }
     throw new Error(`No service for "${request.kind}".`)
   }
@@ -90,15 +99,22 @@ export function createServiceRunners(db: Db, config: ServicesConfig): { runServi
       const next = p.items.slice(done.length, done.length + BATTERY_ITEMS_PER_SLICE)
       const replies: string[] = []
       for (const item of next) {
-        const r = await call(context, {
+        let r: Awaited<ReturnType<typeof call>>
+        try {
+          r = await call(context, {
           purpose: 'evaluation',
           billing: 'learner_first',
           rateLimitRetry: RATE_LIMIT_RETRY,
           provider: p.provider,
           model: p.model,
           callCap: p.evaluationCallCap,
-          request: { system, messages: [{ role: 'user', content: item.prompt }], maxTokens: p.replyMaxTokens },
-        })
+            request: { system, messages: [{ role: 'user', content: item.prompt }], maxTokens: p.replyMaxTokens },
+          })
+        } catch (err) {
+          // Keep what this slice already paid for; with no progress at all, fail so the failure counts.
+          if (replies.length === 0) throw err
+          break
+        }
         replies.push(r.text)
       }
       return { done: false, progress: { replies: [...done, ...replies] } }

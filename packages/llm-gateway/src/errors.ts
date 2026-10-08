@@ -7,6 +7,7 @@ export type LlmUserFacingErrorCode =
   | 'provider_disabled'
   | 'invalid_key'
   | 'provider_unavailable'
+  | 'model_not_allowed'
 
 /**
  * Errors whose message is safe to show a learner. Everything else is logged
