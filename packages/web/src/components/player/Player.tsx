@@ -1,11 +1,14 @@
 'use client'
 import { useCallback, useRef, useState } from 'react'
 import type { AttemptSnapshot } from '@challengeforge/db'
-import type { LabLegacyView, QuestionSetView } from '@challengeforge/types'
+import type { DiagnosticSimView, LabLegacyView, QuestionSetView } from '@challengeforge/types'
 import { postJson } from '@/lib/api'
 import { AssessmentSummary } from './AssessmentSummary'
+import { DiagnosticSimPlayer } from './diagnostic/DiagnosticSimPlayer'
 import { LabLegacyPlayer } from './LabLegacyPlayer'
 import { QuestionSetPlayer } from './QuestionSetPlayer'
+
+const PLAYABLE_TYPES = new Set(['lab-legacy', 'question-set', 'diagnostic-sim'])
 
 export type SendAction = (action: Record<string, unknown>) => Promise<boolean>
 
@@ -92,7 +95,10 @@ export function Player({ challengeId, title, preview, initial }: Props) {
       {snapshot.typeId === 'question-set' && (
         <QuestionSetPlayer key={snapshot.attemptId} view={snapshot.view as QuestionSetView} send={send} busy={busy} />
       )}
-      {!['lab-legacy', 'question-set'].includes(snapshot.typeId) && (
+      {snapshot.typeId === 'diagnostic-sim' && (
+        <DiagnosticSimPlayer key={snapshot.attemptId} view={snapshot.view as DiagnosticSimView} send={send} busy={busy} />
+      )}
+      {!PLAYABLE_TYPES.has(snapshot.typeId) && (
         <p className="card">This kind of challenge cannot be played in this version yet.</p>
       )}
       {ended && snapshot.assessment && <AssessmentSummary assessment={snapshot.assessment} />}

@@ -17,6 +17,7 @@ async function prepare() {
     execFileSync('pnpm', ['--filter', '@challengeforge/cli', 'cf', ...args], { env: { ...process.env, ...E2E_ENV }, stdio: 'inherit' })
   cli('migrate')
   cli('import-pack', path.resolve(import.meta.dirname, 'fixtures/pack'), '--publish')
+  cli('import-pack', path.resolve(import.meta.dirname, '../../../examples/packs/clinical-demo'), '--publish')
 }
 
 await prepare()
