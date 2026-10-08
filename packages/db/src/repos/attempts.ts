@@ -34,6 +34,7 @@ import { withDeadlockRetry } from '../tx'
 import { canReviewAsInstructor } from './cohort-progress'
 import { LOCKED_MESSAGE, canPlay } from './access'
 import { issueCertificateIfEarned } from './certificates'
+import { queueLtiScores } from './lti-scores'
 
 /** Performs a service a type asked for (e.g. a model reply); the server adds secrets such as API keys. */
 export type ServiceRunner = (
@@ -393,6 +394,8 @@ export async function recordAssessment(
     .execute()
   // A final pass may complete a pack that awards a certificate (never one still waiting for review).
   if (assessment.passed && assessment.status !== 'pending_review') await issueCertificateIfEarned(trx, scope.siteId, row.user_id, row.challenge_id, now)
+  // A final result goes back to any LMS grade column the learner launched this challenge from.
+  if (assessment.status !== 'pending_review') await queueLtiScores(trx, scope.siteId, row.user_id, row.challenge_id, now)
 }
 
 export interface ProgressRow {

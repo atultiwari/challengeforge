@@ -32,6 +32,8 @@ export type AuditAction =
   | 'payment.rejected'
   | 'certificates.set'
   | 'certificate.revoked'
+  | 'lti.platform_saved'
+  | 'lti.platform_removed'
 
 export interface AuditEntry {
   action: AuditAction

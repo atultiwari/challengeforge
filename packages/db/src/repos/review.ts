@@ -11,6 +11,7 @@ import { ForbiddenError, NotFoundError, hasRole, requireSignedIn, type Scope } f
 import { getAttempt, type AttemptDeps, type AttemptSnapshot } from './attempts'
 import { recordAudit } from './audit'
 import { issueCertificateIfEarned } from './certificates'
+import { queueLtiScores } from './lti-scores'
 import { canReviewAsInstructor, reviewablePairs } from './cohort-progress'
 import { isTeacher } from './orgs'
 
@@ -117,6 +118,7 @@ export async function overrideAssessment(db: Db, scope: Scope, attemptId: string
       .execute()
     await recomputeProgress(trx, scope.siteId, attempt.userId, attempt.challengeId)
     if (override.passed) await issueCertificateIfEarned(trx, scope.siteId, attempt.userId, attempt.challengeId)
+    await queueLtiScores(trx, scope.siteId, attempt.userId, attempt.challengeId)
     await recordAudit(trx, scope, { action: 'assessment.overridden', targetType: 'attempt', targetId: attemptId, details: { passed: override.passed, points: override.passed ? points : 0 } })
   })
 }

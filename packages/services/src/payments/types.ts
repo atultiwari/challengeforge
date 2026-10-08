@@ -50,4 +50,7 @@ export class PaymentProviderError extends Error {
   }
 }
 
-export type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
+export type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
+
+/** Outgoing calls to providers and LMSs never hang a request or a cron run. */
+export const OUTBOUND_TIMEOUT_MS = 15_000

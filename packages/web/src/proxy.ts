@@ -6,7 +6,11 @@ import { buildCsp, newNonce } from '@/lib/csp'
  * Authorisation is NOT decided here; every page and handler checks the
  * caller's scope itself.
  */
+/** Responses that set their own, narrower CSP (the LTI deep-link hand-back posts to the LMS). */
+const OWN_CSP = /^\/lti\/deep-link\/[^/]+\/return$/
+
 export function proxy(request: NextRequest) {
+  if (OWN_CSP.test(request.nextUrl.pathname)) return NextResponse.next()
   const csp = buildCsp(newNonce(), {
     isDev: process.env.NODE_ENV === 'development',
     https: (process.env.APP_URL ?? '').startsWith('https://'),

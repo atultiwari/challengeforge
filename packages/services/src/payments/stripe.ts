@@ -6,7 +6,7 @@
  */
 import type { PaymentEvent } from '@challengeforge/db'
 import { hmacHex, sameHex } from './hmac'
-import { PaymentProviderError, WebhookSignatureError, type FetchLike, type PaymentProvider } from './types'
+import { OUTBOUND_TIMEOUT_MS, PaymentProviderError, WebhookSignatureError, type FetchLike, type PaymentProvider } from './types'
 
 const API = 'https://api.stripe.com/v1/checkout/sessions'
 const TOLERANCE_SECONDS = 300
@@ -52,6 +52,7 @@ export function stripeProvider(config: StripeConfig, fetchImpl: FetchLike = fetc
           'idempotency-key': `cf-${req.paymentId}`,
         },
         body: form.toString(),
+        signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
       })
       const json = (await res.json().catch(() => ({}))) as { id?: unknown; url?: unknown }
       if (!res.ok || typeof json.id !== 'string' || typeof json.url !== 'string') throw new PaymentProviderError(`Stripe checkout failed (HTTP ${res.status}).`)

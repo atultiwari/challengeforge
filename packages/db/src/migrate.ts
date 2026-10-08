@@ -13,6 +13,7 @@ import * as m0006 from './migrations/0006_editors'
 import * as m0007 from './migrations/0007_cohorts'
 import * as m0008 from './migrations/0008_access_payments'
 import * as m0009 from './migrations/0009_certificates'
+import * as m0010 from './migrations/0010_lti'
 
 const MIGRATIONS: Record<string, Migration> = {
   '0001_init': m0001,
@@ -24,6 +25,7 @@ const MIGRATIONS: Record<string, Migration> = {
   '0007_cohorts': m0007,
   '0008_access_payments': m0008,
   '0009_certificates': m0009,
+  '0010_lti': m0010,
 }
 
 function migratorFor(db: Db): Migrator {

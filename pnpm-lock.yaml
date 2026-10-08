@@ -100,6 +100,9 @@ importers:
       '@challengeforge/llm-gateway':
         specifier: workspace:*
         version: link:../llm-gateway
+      jose:
+        specifier: ^6.2.12
+        version: 6.2.12
       nodemailer:
         specifier: ^10.0.16
         version: 10.0.16
@@ -177,6 +180,9 @@ importers:
       '@types/react-dom':
         specifier: ^19
         version: 19.3.0(@types/react@19.3.0)
+      jose:
+        specifier: 6.2.12
+        version: 6.2.12
       mysql2:
         specifier: ^3.24.5
         version: 3.24.5(@types/node@22.20.5)
@@ -2523,7 +2529,7 @@ snapshots:
       obug: 2.2.1
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 5.0.3(@types/node@22.20.5)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@22.20.5)(esbuild@0.25.12)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      vitest: 5.0.3(@types/node@22.20.5)(@vitest/coverage-v8@5.0.3)(vite@8.3.3(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   '@vitest/istanbul-lib-coverage@1.0.2': {}
 

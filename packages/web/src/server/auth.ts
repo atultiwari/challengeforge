@@ -1,9 +1,10 @@
 import 'server-only'
 import { betterAuth } from 'better-auth'
 import { nextCookies } from 'better-auth/next-js'
-import { findSiteBySlug, recordAudit } from '@challengeforge/db'
+import { findSiteBySlug, recordAudit, redeemLtiTicket } from '@challengeforge/db'
 import { db } from './db'
 import { env } from './env'
+import { ltiSessionPlugin } from './lti-session-plugin'
 import { mailer, passwordResetMessage, sendInBackground, verificationMessage } from './mail'
 import { rateLimitsDisabledForTests } from './test-switches'
 
@@ -54,7 +55,7 @@ function createAuth() {
     // In-memory limits reset when the host idles the process; they still blunt bursts.
     rateLimit: { enabled: !rateLimitsDisabledForTests(), window: 60, max: 30 },
     advanced: { useSecureCookies: config.APP_URL.startsWith('https://') },
-    plugins: [nextCookies()],
+    plugins: [nextCookies(), ltiSessionPlugin((ticket) => redeemLtiTicket(db(), ticket))],
   })
 }
 

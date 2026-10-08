@@ -284,6 +284,15 @@ export interface Database {
   payments: PaymentsTable
   payment_events: PaymentEventsTable
   certificates: CertificatesTable
+  lti_platforms: LtiPlatformsTable
+  lti_keys: LtiKeysTable
+  lti_states: LtiStatesTable
+  lti_users: LtiUsersTable
+  lti_tickets: LtiTicketsTable
+  lti_links: LtiLinksTable
+  lti_link_users: LtiLinkUsersTable
+  lti_deep_links: LtiDeepLinksTable
+  lti_score_outbox: LtiScoreOutboxTable
 }
 
 export type PackAccess = 'open' | 'restricted'
@@ -345,6 +354,105 @@ export interface CertificatesTable {
   issued_at: Timestamp
   revoked_at: NullableTimestamp
   revoke_reason: string | null
+}
+
+export interface LtiPlatformsTable {
+  id: string
+  site_id: string
+  name: string
+  issuer: string
+  client_id: string
+  auth_login_url: string
+  auth_token_url: string
+  jwks_url: string
+  deployment_ids: Json
+  active: Bool
+  created_at: Timestamp
+}
+
+export interface LtiKeysTable {
+  kid: string
+  site_id: string
+  public_jwk: Json
+  /** AES-GCM sealed private JWK (packages/services seals and opens it). */
+  private_jwk_sealed: string
+  active: Bool
+  created_at: Timestamp
+}
+
+export interface LtiStatesTable {
+  state: string
+  site_id: string
+  platform_id: string
+  nonce: string
+  expires_at: Timestamp
+  used_at: NullableTimestamp
+}
+
+export interface LtiUsersTable {
+  platform_id: string
+  sub: string
+  site_id: string
+  user_id: string
+  created_at: Timestamp
+}
+
+export interface LtiTicketsTable {
+  ticket: string
+  user_id: string
+  expires_at: Timestamp
+  used_at: NullableTimestamp
+}
+
+export interface LtiLinksTable {
+  id: string
+  site_id: string
+  platform_id: string
+  deployment_id: string
+  resource_link_id: string
+  context_id: string | null
+  context_title: string | null
+  challenge_id: string
+  lineitem_url: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export interface LtiLinkUsersTable {
+  link_id: string
+  user_id: string
+  sub: string
+  last_launch_at: Timestamp
+}
+
+export interface LtiDeepLinksTable {
+  id: string
+  site_id: string
+  platform_id: string
+  deployment_id: string
+  return_url: string
+  data: string | null
+  user_id: string
+  expires_at: Timestamp
+  used_at: NullableTimestamp
+}
+
+export interface LtiScoreOutboxTable {
+  id: string
+  site_id: string
+  link_id: string
+  user_id: string
+  sub: string
+  /** DECIMAL: mysql2 returns strings. */
+  score_given: ColumnType<string, number, number>
+  score_maximum: ColumnType<string, number, number>
+  grading_progress: string
+  status: 'pending' | 'sent' | 'failed'
+  failures: number
+  next_attempt_at: Timestamp
+  last_error: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
 }
 
 export interface PaymentEventsTable {

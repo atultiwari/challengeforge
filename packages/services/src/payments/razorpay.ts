@@ -7,7 +7,7 @@
  */
 import type { PaymentEvent } from '@challengeforge/db'
 import { hmacHex, sameHex } from './hmac'
-import { PaymentProviderError, WebhookSignatureError, type FetchLike, type PaymentProvider } from './types'
+import { OUTBOUND_TIMEOUT_MS, PaymentProviderError, WebhookSignatureError, type FetchLike, type PaymentProvider } from './types'
 
 const API = 'https://api.razorpay.com/v1/payment_links'
 
@@ -49,6 +49,7 @@ export function razorpayProvider(config: RazorpayConfig, fetchImpl: FetchLike = 
           callback_method: 'get',
           notes: { payment_id: req.paymentId },
         }),
+        signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
       })
       const json = (await res.json().catch(() => ({}))) as { id?: unknown; short_url?: unknown }
       if (!res.ok || typeof json.id !== 'string' || typeof json.short_url !== 'string') throw new PaymentProviderError(`Razorpay payment link failed (HTTP ${res.status}).`)

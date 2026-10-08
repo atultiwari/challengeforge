@@ -14,6 +14,8 @@
   "dependencies": {
     "@challengeforge/db": "workspace:*",
     "@challengeforge/engine": "workspace:*",
+    "@challengeforge/llm-gateway": "workspace:*",
+    "@challengeforge/services": "workspace:*",
     "@challengeforge/types": "workspace:*",
     "better-auth": "^1.7.5",
     "next": "16.3.5",
@@ -21,9 +23,7 @@
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
     "server-only": "0.0.1",
-    "zod": "^4.1.0",
-    "@challengeforge/llm-gateway": "workspace:*",
-    "@challengeforge/services": "workspace:*"
+    "zod": "^4.1.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
@@ -31,6 +31,7 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "jose": "6.2.12",
     "mysql2": "^3.24.5",
     "tailwindcss": "^4.3.0",
     "typescript": "^5.9"

@@ -147,7 +147,28 @@ buyer returns to. The amount always comes from your price, and a paid amount
 that doesn't match is rejected. A *full* refund ends access; a partial refund
 does not.
 
-## 8. Upgrades
+## 8. Connecting an LMS (LTI 1.3, optional)
+
+ChallengeForge can be an external tool in Moodle, Canvas, Blackboard or
+Brightspace. Teachers add challenges to a course, learners open them from the
+course, and grades go back to the LMS grade book.
+
+1. In **Admin → LMS (LTI)**, copy the four URLs: login, launch, deep linking
+   and public keyset.
+2. In the LMS, add an **LTI 1.3 external tool** with those URLs. Turn on
+   **Deep Linking** and **Assignment and Grade Services**. Set it to **open in
+   a new window**.
+3. Copy the details the LMS shows (platform ID/issuer, client ID, deployment
+   ID, authentication request URL, access token URL, public keyset URL) into
+   the form on the same admin page.
+4. Grades are sent by the cron job in section 6, within 5 minutes of a
+   learner finishing. Failed sends are retried, with backoff, for about a day.
+
+LMS users get their own accounts here, linked to their LMS identity. An
+existing account is never matched by email. A course placement unlocks its
+pack for the learners it launches, even if the pack is restricted.
+
+## 9. Upgrades
 
 1. `pnpm release` locally.
 2. Upload the new archive in hPanel.
@@ -157,7 +178,7 @@ does not.
 Attempts in progress are pinned to the version they started on, so publishing
 changes never disturbs a learner mid-attempt.
 
-## 9. Backups
+## 10. Backups
 
 The database holds everything, including uploaded datasets and case files.
 
@@ -170,7 +191,7 @@ The database holds everything, including uploaded datasets and case files.
 
 - **Test a restore** into a scratch database once, before you need it.
 
-## 10. Operating notes
+## 11. Operating notes
 
 - **Cold starts.** Hostinger stops idle Node apps and starts them on the next
   request. The first page after a quiet period can take a few seconds.
