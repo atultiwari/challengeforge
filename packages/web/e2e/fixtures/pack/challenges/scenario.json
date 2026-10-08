@@ -1,0 +1,26 @@
+{
+  "title": "E2E scenario mission",
+  "story_brief": "Pick the safety-critical detail.",
+  "interaction": "scenario_quiz",
+  "interaction_config": {
+    "outcome_labels": ["Case 1"],
+    "instructions": "Choose the one detail that matters.",
+    "ai_name": "TestBot",
+    "answers_field": "answers",
+    "scenarios": [
+      {
+        "id": "s1",
+        "title": "A synthetic case",
+        "asker": "A tester",
+        "prompt": "What should I add?",
+        "ai_answer": "Add drug X.",
+        "question": "Which detail matters?",
+        "options": [{ "id": "colour", "text": "Favourite colour" }, { "id": "allergy", "text": "Allergies" }]
+      }
+    ]
+  },
+  "rule": { "type": "exact", "field": "answers.s1", "expected": "allergy" },
+  "scoring": { "base_points": 100, "hint_costs": [10], "wrong_attempt_penalty": 10 },
+  "hints": ["Think about reactions."],
+  "debrief": "Always ask about allergies."
+}

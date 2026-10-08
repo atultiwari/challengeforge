@@ -7,13 +7,14 @@
  *   challengeforge import-pack <dir>       import a pack (add --publish to publish it)
  *   challengeforge publish-pack <slug>     publish every challenge in an imported pack
  *   challengeforge create-admin            create (or promote) the site's administrator
+ *   challengeforge reset-password          set a new password (from NEW_PASSWORD) and sign the person out
  */
 import { Command } from 'commander'
 import { createDb, ensureSite, grantRoleUnchecked, importPack, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
 import { registry } from '@challengeforge/types'
 import { loadConfig } from './config'
 import { loadPackFromDirectory } from './pack-loader'
-import { createUserWithPassword } from './users'
+import { createUserWithPassword, resetPassword } from './users'
 
 /** The CLI acts as the system operator, with admin rights on the configured site. */
 const systemScope = (siteId: string): Scope => ({ siteId, principal: { userId: 'system:cli', role: 'admin' } })
@@ -89,6 +90,17 @@ program
       const userId = existing?.id ?? (await createUserWithPassword(db, options.email, options.name, process.env['ADMIN_PASSWORD']))
       await grantRoleUnchecked(db, site.id, userId, 'admin')
       process.stdout.write(`${existing ? 'Promoted' : 'Created'} ${options.email} as admin of ${site.slug}.\n`)
+    }),
+  )
+
+program
+  .command('reset-password')
+  .requiredOption('--email <email>', 'the account to reset')
+  .description('Set a new password (read from NEW_PASSWORD) and end all of that person\'s sessions')
+  .action((options: { email: string }) =>
+    withDb(async (db) => {
+      await resetPassword(db, options.email, process.env['NEW_PASSWORD'])
+      process.stdout.write(`Password reset for ${options.email}; existing sessions ended.\n`)
     }),
   )
 

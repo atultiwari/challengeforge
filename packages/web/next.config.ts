@@ -8,6 +8,8 @@ import type { NextConfig } from 'next'
  */
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // E2E runs build into their own folder so they never disturb a running dev server.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   transpilePackages: ['@challengeforge/db', '@challengeforge/engine', '@challengeforge/types'],
   poweredByHeader: false,

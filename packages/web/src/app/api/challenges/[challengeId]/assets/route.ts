@@ -1,6 +1,7 @@
 import { getAssetForPlay } from '@challengeforge/db'
 import { db } from '@/server/db'
 import { fail, toResponse } from '@/server/http'
+import { withinLimit } from '@/server/limits'
 import { currentScope } from '@/server/scope'
 
 /**
@@ -13,6 +14,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ challengeId
     const path = new URL(request.url).searchParams.get('path')
     if (!path) return fail(400, 'no_path', 'No asset requested.')
     const { scope } = await currentScope()
+    if (!withinLimit('asset', scope, request)) return fail(429, 'rate_limited', 'Too many requests. Wait a minute and try again.')
     const asset = await getAssetForPlay(db(), scope, challengeId, path)
     return new Response(new Uint8Array(asset.bytes), {
       headers: {

@@ -2,6 +2,7 @@ import { performAction } from '@challengeforge/db'
 import { db } from '@/server/db'
 import { attemptDeps } from '@/server/attempt-deps'
 import { fail, ok, readJson, sameOrigin, toResponse } from '@/server/http'
+import { withinLimit } from '@/server/limits'
 import { currentScope } from '@/server/scope'
 
 /**
@@ -17,6 +18,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ attemptId:
     if (!body || body.action === undefined) return fail(400, 'invalid_action', 'No action was sent.')
     const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : undefined
     const { scope } = await currentScope()
+    if (!withinLimit('action', scope, request)) return fail(429, 'rate_limited', 'Too many requests. Wait a minute and try again.')
     const outcome = await performAction(db(), scope, attemptDeps, attemptId, body.action, idempotencyKey ? { idempotencyKey } : {})
     if (!outcome.ok) return fail(outcome.error.code === 'rejected' ? 409 : 400, outcome.error.typeCode ?? outcome.error.code, outcome.error.message)
     return ok(outcome.snapshot)

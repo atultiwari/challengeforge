@@ -1,0 +1,10 @@
+{
+  "title": "E2E arithmetic quiz",
+  "intro": "Two quick questions.",
+  "items": [
+    { "id": "q1", "type": "single", "prompt": "Which is even?", "options": [{ "id": "a", "text": "Three" }, { "id": "b", "text": "Four" }], "answer": "b", "explanation": "Four divides by two." },
+    { "id": "q2", "type": "numeric", "prompt": "Six times seven?", "value": 42, "explanation": "6 × 7 = 42." }
+  ],
+  "pass_fraction": 1,
+  "debrief": "Well done."
+}

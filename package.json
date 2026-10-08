@@ -18,11 +18,13 @@
     "test:db:mysql": "TEST_DB_URL=mysql://root:devroot@127.0.0.1:33061 vitest run -c vitest.db.config.ts",
     "test:db:mariadb": "TEST_DB_URL=mysql://root:devroot@127.0.0.1:33062 vitest run -c vitest.db.config.ts",
     "dev": "pnpm --filter @challengeforge/web dev",
-    "cf": "pnpm --filter @challengeforge/cli cf"
+    "cf": "pnpm --filter @challengeforge/cli cf",
+    "release": "node scripts/build-release.mjs"
   },
   "devDependencies": {
     "@types/node": "^22",
     "@vitest/coverage-v8": "^5.0.3",
+    "esbuild": "^0.25.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9",
     "vitest": "^5.0.3",

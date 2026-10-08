@@ -1,6 +1,7 @@
 import 'server-only'
 import type { Scope } from '@challengeforge/db'
 import { fail, readJson, sameOrigin, toResponse } from './http'
+import { withinLimit } from './limits'
 import { currentScope } from './scope'
 
 /**
@@ -17,6 +18,7 @@ export async function mutation(
   if (body === null || typeof body !== 'object' || Array.isArray(body)) return fail(400, 'bad_request', 'The request body was not valid JSON.')
   try {
     const { scope } = await currentScope()
+    if (!withinLimit('author', scope, request)) return fail(429, 'rate_limited', 'Too many requests. Wait a minute and try again.')
     return await handler({ scope, body: body as Record<string, unknown> })
   } catch (err) {
     return toResponse(err)

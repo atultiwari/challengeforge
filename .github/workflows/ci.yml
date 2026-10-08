@@ -45,3 +45,26 @@ jobs:
       - run: pnpm vitest run -c vitest.db.config.ts
         env:
           TEST_DB_URL: mysql://root:ciroot@127.0.0.1:3306
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ciroot
+        ports: ['3306:3306']
+        options: --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pciroot" --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @challengeforge/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @challengeforge/web test:e2e
+        env:
+          TEST_DB_URL: mysql://root:ciroot@127.0.0.1:3306
+          CI: 'true'

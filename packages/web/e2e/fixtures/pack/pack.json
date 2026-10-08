@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "slug": "e2e-pack",
+  "title": "E2E pack (synthetic)",
+  "description": "Synthetic content for end-to-end tests. Safe for the public repo.",
+  "sections": [{ "slug": "basics", "title": "Basics" }],
+  "challenges": [
+    { "slug": "e2e-quiz", "section": "basics", "type": "question-set@1", "definition": "challenges/quiz.json" },
+    { "slug": "e2e-scenario", "section": "basics", "type": "lab-legacy@1", "definition": "challenges/scenario.json" }
+  ]
+}

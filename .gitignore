@@ -12,3 +12,8 @@ dist/
 packs/
 .next/
 next-env.d.ts
+.next-e2e/
+test-results/
+playwright-report/
+release/
+challengeforge-release.zip
