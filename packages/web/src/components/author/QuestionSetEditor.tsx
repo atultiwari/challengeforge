@@ -1,65 +1,20 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { newItem, type ItemType, type QuestionItem, type QuestionSetDef } from '@challengeforge/types'
-import { postJson, requestJson } from '@/lib/api'
-import { IssuesList, type Issue } from './IssuesList'
+import { moveItem as move } from '@/lib/schema-form/model'
+import { IssuesList } from './IssuesList'
 import { ItemEditor } from './ItemEditor'
-
-const LINT_DELAY_MS = 600
-
-function move<T>(list: readonly T[], from: number, delta: number): T[] {
-  const to = from + delta
-  if (to < 0 || to >= list.length) return [...list]
-  const next = [...list]
-  const [moved] = next.splice(from, 1)
-  next.splice(to, 0, moved as T)
-  return next
-}
+import { useDefinitionDraft } from './useDefinitionDraft'
 
 /**
  * The "WordPress for challenges" form for question sets: edit, see problems
  * as you type (server-side schema + lint), save as a new draft version.
  */
 export function QuestionSetEditor({ challengeId, initial }: { challengeId: string | null; initial: QuestionSetDef }) {
-  const router = useRouter()
-  const [def, setDef] = useState(initial)
-  const [issues, setIssues] = useState<Issue[]>([])
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  // Lint replies can arrive out of order; only the newest request may update the list.
-  const lintSeq = useRef(0)
-
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      const seq = ++lintSeq.current
-      const r = await postJson<{ issues: Issue[] }>('/api/author/lint', { typeId: 'question-set', definition: def })
-      if (r.ok && seq === lintSeq.current) setIssues(r.data.issues)
-    }, LINT_DELAY_MS)
-    return () => clearTimeout(timer)
-  }, [def])
+  const { def, setDef, issues, saving, message, save } = useDefinitionDraft('question-set', challengeId, initial)
 
   const update = (patch: Partial<QuestionSetDef>) => setDef({ ...def, ...patch })
   const setItem = (index: number, item: QuestionItem) => update({ items: def.items.map((it, i) => (i === index ? item : it)) })
   const addItem = (type: ItemType) => update({ items: [...def.items, newItem(type, def.items.map((i) => i.id))] })
-
-  async function save() {
-    setSaving(true)
-    setMessage(null)
-    const result = challengeId
-      ? await requestJson<{ version: number }>('PUT', `/api/author/challenges/${challengeId}`, { definition: def })
-      : await postJson<{ id: string }>('/api/author/challenges', { typeId: 'question-set', definition: def })
-    setSaving(false)
-    if (!result.ok) {
-      setMessage(result.error.message)
-      if (result.error.issues) setIssues(result.error.issues as Issue[])
-      return
-    }
-    // The page shows the "saved" notice from the URL, so it survives the editor remounting on the new version.
-    if ('id' in result.data) router.push(`/author/${result.data.id}?saved=1`)
-    else router.replace(`/author/${challengeId}?saved=${result.data.version}`)
-    router.refresh()
-  }
 
   return (
     <div className="space-y-6">

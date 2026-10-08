@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation'
 import { ForbiddenError, NotFoundError, getForAuthoring } from '@challengeforge/db'
-import type { QuestionSetDef } from '@challengeforge/types'
+import { authoringSchema, isFormAuthored, type QuestionSetDef } from '@challengeforge/types'
 import { QuestionSetEditor } from '@/components/author/QuestionSetEditor'
+import { SchemaDefinitionEditor } from '@/components/author/SchemaDefinitionEditor'
+import type { JsonSchema } from '@/lib/schema-form/model'
 import { WorkflowControls } from '@/components/author/WorkflowControls'
 import { db } from '@/server/db'
 import { requirePageRole } from '@/server/guards'
@@ -42,6 +44,14 @@ export default async function EditChallenge({
       />
       {challenge.typeId === 'question-set' ? (
         <QuestionSetEditor key={challenge.versionId} challengeId={challenge.id} initial={challenge.definition as QuestionSetDef} />
+      ) : isFormAuthored(challenge.typeId) ? (
+        <SchemaDefinitionEditor
+          key={challenge.versionId}
+          typeId={challenge.typeId}
+          challengeId={challenge.id}
+          schema={authoringSchema(challenge.typeId) as JsonSchema}
+          initial={challenge.definition}
+        />
       ) : (
         <p className="card text-ink-muted">
           This challenge came from a content pack. Edit it in the pack and re-import; you can preview and publish it here.

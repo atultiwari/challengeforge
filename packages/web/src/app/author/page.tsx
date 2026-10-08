@@ -22,7 +22,8 @@ export default async function AuthorHome() {
           <p className="eyebrow">Author</p>
           <h1 className="text-4xl">Your challenges</h1>
         </div>
-        <Link href="/author/new" className="btn-primary">New question set</Link>
+        <Link href="/author/new" className="btn-secondary">New question set</Link>
+        <Link href="/author/new?type=diagnostic-sim" className="btn-primary">New diagnostic case</Link>
       </header>
       {challenges.length === 0 ? (
         <p className="card">Nothing here yet. Start with a question set: a clinical case quiz takes about ten minutes to write.</p>

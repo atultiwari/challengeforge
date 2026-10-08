@@ -6,15 +6,20 @@ import { z } from 'zod'
 
 const Id = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/, 'Use lowercase letters, digits and underscores, starting with a letter.')
 const Text = z.string().min(1)
-const Keywords = z.array(Text).default([])
+const Keywords = z
+  .array(Text)
+  .default([])
+  .describe('Words a learner might type to find this item, e.g. synonyms and abbreviations. The label\'s own words always count.')
 const Minutes = z.number().int().nonnegative()
 
 export const HistoryItemSchema = z.object({
   id: Id,
   label: Text,
   keywords: Keywords,
-  response: Text,
-  tag: z.enum(['essential', 'useful', 'neutral']),
+  response: Text.describe('What the patient says, or what the examination shows.'),
+  tag: z
+    .enum(['essential', 'useful', 'neutral'])
+    .describe('Essential items are graded: a good work-up covers them. Useful and neutral items are never penalised.'),
   category: z.string().optional(),
 })
 
@@ -22,9 +27,9 @@ export const InvestigationSchema = z.object({
   id: Id,
   label: Text,
   keywords: Keywords,
-  result: Text,
+  result: Text.describe('The result the learner sees once it is back.'),
   /** Simulated minutes from ordering until the result is visible. */
-  turnaround: Minutes,
+  turnaround: Minutes.describe('Simulated minutes from ordering until the result is back.'),
   cost: z.number().nonnegative().default(0),
   /** Can be ordered again, e.g. a repeat blood gas for monitoring. */
   repeatable: z.boolean().default(false),
@@ -36,9 +41,11 @@ export const InvestigationSchema = z.object({
   serial_results: z
     .array(z.object({ from_time: Minutes, if_done: z.array(Id).default([]), result: Text }))
     .default([]),
-  tag: z.enum(['essential', 'useful', 'unnecessary', 'harmful']),
+  tag: z
+    .enum(['essential', 'useful', 'unnecessary', 'harmful'])
+    .describe('Essential tests are graded; unnecessary ones cost efficiency marks; harmful ones fail the case.'),
   /** Shown in the debrief when the tag counts against the learner. */
-  reason: z.string().optional(),
+  reason: z.string().optional().describe('Why it is unnecessary or harmful, shown in the debrief.'),
 })
 
 export const TreatmentSchema = z.object({
@@ -47,8 +54,10 @@ export const TreatmentSchema = z.object({
   keywords: Keywords,
   response: Text,
   /** not_recommended costs efficiency marks; contraindicated is a critical failure. */
-  tag: z.enum(['essential', 'useful', 'neutral', 'not_recommended', 'contraindicated']),
-  reason: z.string().optional(),
+  tag: z
+    .enum(['essential', 'useful', 'neutral', 'not_recommended', 'contraindicated'])
+    .describe('Essential treatments are graded; not recommended ones cost marks; contraindicated ones fail the case.'),
+  reason: z.string().optional().describe('Why it is not recommended or contraindicated, shown in the debrief.'),
 })
 
 export const TimedEventSchema = z.object({
@@ -107,7 +116,7 @@ export const RubricSchema = z.object({
   /** Ordering, monitoring and graded events carry their own weights. */
   ordering: z.array(OrderingRuleSchema).default([]),
   monitoring: z.array(MonitoringRuleSchema).default([]),
-  pass_fraction: z.number().min(0).max(1).default(0.6),
+  pass_fraction: z.number().min(0).max(1).default(0.6).describe('Share of the total marks needed to pass, from 0 to 1 (0.6 = 60%).'),
   critical: z
     .discriminatedUnion('mode', [
       z.object({ mode: z.literal('fail') }),
@@ -135,7 +144,7 @@ const DiagnosticSimDefBase = z.object({
       minutes_per_examination: Minutes.default(3),
       minutes_per_order: Minutes.default(1),
       minutes_per_treatment: Minutes.default(2),
-      time_budget: z.number().int().positive().nullable().default(null),
+      time_budget: z.number().int().positive().nullable().default(null).describe('Simulated minutes before the case ends on its own. Leave unset for no limit.'),
       max_actions: z.number().int().positive().max(500).default(200),
     })
     .default({
@@ -146,14 +155,16 @@ const DiagnosticSimDefBase = z.object({
       time_budget: null,
       max_actions: 200,
     }),
-  history: z.array(HistoryItemSchema).min(1),
-  examination: z.array(HistoryItemSchema).default([]),
-  investigations: z.array(InvestigationSchema).default([]),
-  treatments: z.array(TreatmentSchema).default([]),
-  events: z.array(TimedEventSchema).default([]),
+  history: z.array(HistoryItemSchema).min(1).describe('Questions the learner can ask, found only by searching (they never see a menu).'),
+  examination: z.array(HistoryItemSchema).default([]).describe('Examinations the learner can perform.'),
+  investigations: z.array(InvestigationSchema).default([]).describe('Tests the learner can order. Results appear after their turnaround time.'),
+  treatments: z.array(TreatmentSchema).default([]).describe('Treatments the learner can give.'),
+  events: z.array(TimedEventSchema).default([]).describe('Things that happen at a set time unless the learner has acted, e.g. the patient deteriorates.'),
   gates: z.object({ differential_before_investigations: z.boolean().default(false) }).default({ differential_before_investigations: false }),
   answer: z.object({
-    diagnosis: z.object({ accepted: z.array(Text).min(1) }),
+    diagnosis: z.object({
+      accepted: z.array(Text).min(1).describe('Every way of writing the correct diagnosis, including abbreviations. Case and punctuation are ignored.'),
+    }),
     differentials: z.array(z.object({ id: Id, label: Text, accepted: z.array(Text).min(1) })).default([]),
     min_differentials: z.number().int().nonnegative().default(0),
   }),
