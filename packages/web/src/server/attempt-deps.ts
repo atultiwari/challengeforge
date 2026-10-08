@@ -1,9 +1,11 @@
 import 'server-only'
 import type { AttemptDeps } from '@challengeforge/db'
 import { registry } from '@challengeforge/types'
+import { serviceRunner } from './services'
 
-/** Phase 1 types call no services (no model calls), so none are wired. */
+/** Model calls and judged grading go through the service runner (and so through the gateway). */
 export const attemptDeps: AttemptDeps = {
   registry,
+  runService: serviceRunner,
   onError: (cause) => console.error('[attempt] step failed', cause),
 }

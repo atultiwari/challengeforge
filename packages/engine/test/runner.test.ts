@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 import type { AttemptCtx, ChallengeType, StepEnv } from '../src/contract'
-import { startAttempt, act, assess, replay } from '../src/runner'
+import { startAttempt, act, assess, replay, applyServiceResult } from '../src/runner'
 import { combineCriteria } from '../src/assessment'
 
 /**
@@ -236,5 +236,39 @@ describe('lint is part of the contract', () => {
   it('lets a type report authoring problems before publishing', () => {
     expect(counterType.lint({ target: 100, limit: 2 })).toHaveLength(1)
     expect(counterType.lint(def)).toEqual([])
+  })
+})
+
+describe('service actions (a type describes the call; the server makes it)', () => {
+  const serviceType: typeof counterType = {
+    ...counterType,
+    prepare: (_def, _state, action) => (action.kind === 'ask_oracle' ? { kind: 'oracle', payload: { q: 'next?' } } : null),
+    async step(def, state, action, env) {
+      if (action.kind === 'ask_oracle') {
+        if (typeof env.recorded !== 'string') return { ok: false, error: { code: 'service_required', message: 'Try again.' } }
+        return { ok: true, state: { ...state, oracleSaid: env.recorded, steps: state.steps + 1 }, effects: env.recorded }
+      }
+      return counterType.step(def, state, action, env)
+    },
+  }
+
+  it('the type names what it needs, without making the call', () => {
+    const { attempt } = startAttempt(serviceType, def, ctx)
+    expect(serviceType.prepare?.(def, attempt.state, { kind: 'ask_oracle' }, ctx)).toEqual({ kind: 'oracle', payload: { q: 'next?' } })
+    expect(serviceType.prepare?.(def, attempt.state, { kind: 'add', n: 1 }, ctx)).toBeNull()
+  })
+
+  it('a plain act cannot complete a service action: the client can never supply the result', async () => {
+    const { attempt } = startAttempt(serviceType, def, ctx)
+    expect(await act(serviceType, def, attempt, { kind: 'ask_oracle' }, env())).toMatchObject({ ok: false, error: { typeCode: 'service_required' } })
+  })
+
+  it('applyServiceResult applies the server-obtained result and records it for replay', async () => {
+    const { attempt } = startAttempt(serviceType, def, ctx)
+    const r = await applyServiceResult(serviceType, def, attempt, { kind: 'ask_oracle' }, env(), 'the server said this')
+    if (!r.ok) throw new Error('expected ok')
+    expect(r.event.effects).toBe('the server said this')
+    const rebuilt = await replay(serviceType, def, ctx, [r.event], {})
+    expect(rebuilt).toMatchObject({ ok: true, attempt: { state: { oracleSaid: 'the server said this' } } })
   })
 })

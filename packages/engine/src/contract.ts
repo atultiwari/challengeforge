@@ -59,6 +59,17 @@ export interface LintIssue {
   message: string
 }
 
+/**
+ * Something a step needs from outside the engine (a model reply, a judged
+ * grade). The type only DESCRIBES it; the server performs it with no lock
+ * held, then applies the result through `applyServiceResult`. Secrets such
+ * as API keys or per-learner canaries are added by the server, never the type.
+ */
+export interface ServiceRequest {
+  kind: string
+  payload: unknown
+}
+
 export interface AttemptEvent<A = unknown> {
   seq: number
   action: A
@@ -76,6 +87,12 @@ export interface ChallengeType<Def, State, Action, View> {
   readonly actionSchema: z.ZodType<Action>
   lint(def: Def): readonly LintIssue[]
   init(def: Def, ctx: AttemptCtx): State
+  /**
+   * For actions that need an outside service: what to ask for. Null (or no
+   * `prepare`) means the action is applied directly. The step then receives
+   * the result as `env.recorded` and MUST refuse the action without it.
+   */
+  prepare?(def: Def, state: State, action: Action, ctx: AttemptCtx): ServiceRequest | null
   step(def: Def, state: State, action: Action, env: StepEnv): Promise<StepOutcome<State>>
   /** The ONLY projection of state that may reach the learner (default-deny, PLAN.md §3.4). */
   view(def: Def, state: State): View

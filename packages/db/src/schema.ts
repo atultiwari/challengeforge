@@ -149,6 +149,10 @@ export interface AttemptsTable {
   started_at: Timestamp
   updated_at: Timestamp
   ended_at: NullableTimestamp
+  /** Set while the attempt waits on a model call made outside any transaction. */
+  pending_action: ColumnType<unknown, string | null | undefined, string | null>
+  pending_key: string | null
+  pending_since: NullableTimestamp
 }
 
 export interface AttemptEventsTable {
@@ -185,6 +189,47 @@ export interface ProgressTable {
   updated_at: Timestamp
 }
 
+export interface LlmCallCountersTable {
+  site_id: string
+  user_id: string
+  challenge_id: string
+  purpose: string
+  used: number
+}
+
+export type CredentialSource = 'platform' | 'byok' | 'oauth'
+
+export interface LlmUsageTable {
+  id: string
+  site_id: string
+  user_id: string
+  challenge_id: string
+  purpose: string
+  provider: string
+  model: string
+  credential_source: CredentialSource
+  status: 'reserved' | 'completed'
+  input_tokens: number
+  output_tokens: number
+  /** DECIMAL: mysql2 returns it as a string. */
+  cost_estimate_usd: ColumnType<string | null, number | null, number | null>
+  request_id: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export interface LlmCredentialsTable {
+  site_id: string
+  user_id: string
+  provider: string
+  ciphertext: string
+  iv: string
+  auth_tag: string
+  last4: string
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
 export interface Database {
   sites: SitesTable
   user: UserTable
@@ -201,6 +246,9 @@ export interface Database {
   attempt_events: AttemptEventsTable
   assessments: AssessmentsTable
   progress: ProgressTable
+  llm_call_counters: LlmCallCountersTable
+  llm_usage: LlmUsageTable
+  llm_credentials: LlmCredentialsTable
 }
 
 /** Generated is unused today (all ids are app-generated); kept for future auto columns. */

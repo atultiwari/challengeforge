@@ -5,6 +5,13 @@ import { fail, ok, readJson, sameOrigin, toResponse } from '@/server/http'
 import { withinLimit } from '@/server/limits'
 import { currentScope } from '@/server/scope'
 
+const ERROR_STATUS: Readonly<Record<string, number>> = {
+  rejected: 409,
+  busy: 409,
+  service_failed: 502,
+  service_unavailable: 503,
+}
+
 /**
  * Applies one learner action. The body is `{ action, idempotencyKey }`: the
  * action is validated by the challenge type's own schema in the engine; the
@@ -20,7 +27,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ attemptId:
     const { scope } = await currentScope()
     if (!withinLimit('action', scope, request)) return fail(429, 'rate_limited', 'Too many requests. Wait a minute and try again.')
     const outcome = await performAction(db(), scope, attemptDeps, attemptId, body.action, idempotencyKey ? { idempotencyKey } : {})
-    if (!outcome.ok) return fail(outcome.error.code === 'rejected' ? 409 : 400, outcome.error.typeCode ?? outcome.error.code, outcome.error.message)
+    if (!outcome.ok) {
+      const status = ERROR_STATUS[outcome.error.code] ?? 400
+      return fail(status, outcome.error.typeCode ?? outcome.error.code, outcome.error.message)
+    }
     return ok(outcome.snapshot)
   } catch (err) {
     return toResponse(err)

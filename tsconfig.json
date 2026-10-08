@@ -8,6 +8,9 @@
       "path": "packages/types"
     },
     {
+      "path": "packages/llm-gateway"
+    },
+    {
       "path": "packages/db"
     },
     {

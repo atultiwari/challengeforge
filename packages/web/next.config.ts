@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   // E2E runs build into their own folder so they never disturb a running dev server.
   distDir: process.env.NEXT_DIST_DIR || '.next',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
-  transpilePackages: ['@challengeforge/db', '@challengeforge/engine', '@challengeforge/types'],
+  transpilePackages: ['@challengeforge/db', '@challengeforge/engine', '@challengeforge/llm-gateway', '@challengeforge/types'],
   poweredByHeader: false,
   async headers() {
     return [

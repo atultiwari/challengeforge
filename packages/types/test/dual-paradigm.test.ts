@@ -33,6 +33,7 @@ describe('one contract, both paradigms', () => {
       'lab-legacy@1:static',
       'diagnostic-sim@1:interactive',
       'question-set@1:static',
+      'chat-mission@1:interactive',
     ])
   })
 

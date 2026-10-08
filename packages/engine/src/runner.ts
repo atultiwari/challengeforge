@@ -123,6 +123,29 @@ export function act<D, S, A, V>(
   return applyAction(type, def, attempt, rawAction, env, undefined)
 }
 
+/**
+ * SERVER ONLY. Applies an action whose `prepare` asked for a service, with
+ * the result the server obtained. Never call this with anything a client sent:
+ * the result is trusted as the service's answer and recorded for replay.
+ */
+export function applyServiceResult<D, S, A, V>(
+  type: ChallengeType<D, S, A, V>,
+  def: D,
+  attempt: Attempt<S>,
+  rawAction: unknown,
+  env: ActEnv,
+  serviceResult: unknown,
+): Promise<ActResult<S, A, V>> {
+  return applyAction(type, def, attempt, rawAction, env, serviceResult)
+}
+
+/** Parses an action with the type's schema, for the server to decide whether it needs a service first. */
+export function parseAction<D, S, A, V>(type: ChallengeType<D, S, A, V>, rawAction: unknown): A | null {
+  if (!withinSizeLimit(rawAction)) return null
+  const parsed = type.actionSchema.safeParse(rawAction)
+  return parsed.success ? parsed.data : null
+}
+
 /** Grades a finished attempt over its whole trajectory. */
 export async function assess<D, S, A, V>(
   type: ChallengeType<D, S, A, V>,
