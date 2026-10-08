@@ -83,6 +83,7 @@ export interface PacksTable {
   description: string
   /** Defaults to open; restricted packs need a grant or a cohort assignment. */
   access: ColumnType<PackAccess, PackAccess | undefined, PackAccess>
+  certificates_enabled: ColumnType<number | boolean, boolean | undefined, boolean>
   created_at: Timestamp
 }
 
@@ -282,6 +283,7 @@ export interface Database {
   products: ProductsTable
   payments: PaymentsTable
   payment_events: PaymentEventsTable
+  certificates: CertificatesTable
 }
 
 export type PackAccess = 'open' | 'restricted'
@@ -328,6 +330,21 @@ export interface PaymentsTable {
   status: PaymentStatus
   created_at: Timestamp
   updated_at: Timestamp
+}
+
+export interface CertificatesTable {
+  /** Random and unguessable: holding the id is what lets someone verify it. */
+  id: string
+  site_id: string
+  user_id: string
+  pack_id: string
+  recipient_name: string
+  pack_title: string
+  site_name: string
+  challenge_count: number
+  issued_at: Timestamp
+  revoked_at: NullableTimestamp
+  revoke_reason: string | null
 }
 
 export interface PaymentEventsTable {

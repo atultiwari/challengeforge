@@ -25,6 +25,11 @@ function PackAccessCard({ pack, product, grants }: { pack: PackSummary; product:
           label={restricted ? 'Open to everyone' : 'Restrict'}
           {...(restricted ? {} : { confirm: 'Restrict this pack? Learners without access will see it locked.' })}
         />
+        <PostButton
+          url={`/api/admin/packs/${pack.id}/certificates`}
+          body={{ enabled: !pack.certificatesEnabled }}
+          label={pack.certificatesEnabled ? 'Certificates: on (turn off)' : 'Certificates: off (turn on)'}
+        />
       </div>
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2">

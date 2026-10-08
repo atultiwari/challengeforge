@@ -27,6 +27,8 @@ const LABELS: Record<AuditRecord['action'], string> = {
   'payment.paid': 'Payment received',
   'payment.refunded': 'Payment refunded',
   'payment.rejected': 'Payment rejected (amount mismatch)',
+  'certificates.set': 'Turned certificates on or off',
+  'certificate.revoked': 'Revoked a certificate',
 }
 
 /** Details as short "key: value" pairs; values are shown as text, never as markup. */

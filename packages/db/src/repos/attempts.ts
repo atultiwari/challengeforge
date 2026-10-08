@@ -33,6 +33,7 @@ import { getForAuthoring, getPlayable, loadVersionDefinition } from './content'
 import { withDeadlockRetry } from '../tx'
 import { canReviewAsInstructor } from './cohort-progress'
 import { LOCKED_MESSAGE, canPlay } from './access'
+import { issueCertificateIfEarned } from './certificates'
 
 /** Performs a service a type asked for (e.g. a model reply); the server adds secrets such as API keys. */
 export type ServiceRunner = (
@@ -390,6 +391,8 @@ export async function recordAssessment(
       updated_at: now,
     }))
     .execute()
+  // A final pass may complete a pack that awards a certificate (never one still waiting for review).
+  if (assessment.passed && assessment.status !== 'pending_review') await issueCertificateIfEarned(trx, scope.siteId, row.user_id, row.challenge_id, now)
 }
 
 export interface ProgressRow {

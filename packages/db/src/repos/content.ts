@@ -6,7 +6,7 @@
 import type { TypeRegistry } from '@challengeforge/engine'
 import type { Db } from '../client'
 import { newId } from '../ids'
-import { fromJson, toJson } from '../json'
+import { fromJson, toBool, toJson } from '../json'
 import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireRole, type Scope } from '../scope'
 import type { ChallengeStatus, PackAccess } from '../schema'
 import { withDeadlockRetry } from '../tx'
@@ -244,11 +244,19 @@ export interface PackSummary {
   slug: string
   title: string
   access: PackAccess
+  certificatesEnabled: boolean
 }
 
 /** The site's packs, for choosing what to assign. */
 export async function listPacks(db: Db, scope: Scope): Promise<PackSummary[]> {
-  return db.selectFrom('packs').select(['id', 'slug', 'title', 'access']).where('site_id', '=', scope.siteId).orderBy('title').limit(500).execute()
+  const rows = await db
+    .selectFrom('packs')
+    .select(['id', 'slug', 'title', 'access', 'certificates_enabled'])
+    .where('site_id', '=', scope.siteId)
+    .orderBy('title')
+    .limit(500)
+    .execute()
+  return rows.map(({ certificates_enabled, ...r }) => ({ ...r, certificatesEnabled: toBool(certificates_enabled) }))
 }
 
 /** What learners can play: published, not archived, on this site. Titles only. */

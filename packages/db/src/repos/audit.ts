@@ -30,6 +30,8 @@ export type AuditAction =
   | 'payment.paid'
   | 'payment.refunded'
   | 'payment.rejected'
+  | 'certificates.set'
+  | 'certificate.revoked'
 
 export interface AuditEntry {
   action: AuditAction

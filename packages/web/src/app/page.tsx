@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { listMyCohorts, listMyProgress, listPlayable, lockedChallengeIds, type ChallengeSummary, type Cohort, type ProgressRow } from '@challengeforge/db'
+import { listMyCertificates, listMyCohorts, listMyProgress, listPlayable, lockedChallengeIds, type ChallengeSummary, type Cohort, type ProgressRow } from '@challengeforge/db'
 import { db } from '@/server/db'
 import { currentScope } from '@/server/scope'
 
@@ -19,6 +19,7 @@ export default async function CatalogPage() {
     user ? listMyProgress(db(), scope) : Promise.resolve([] as ProgressRow[]),
     user ? listMyCohorts(db(), scope).then((c) => c.learning) : Promise.resolve([] as Cohort[]),
   ])
+  const certificates = user ? await listMyCertificates(db(), scope) : []
   const byChallenge = new Map(progress.map((p) => [p.challengeId, p]))
   const locked = await lockedChallengeIds(db(), scope, challenges)
 
@@ -44,6 +45,18 @@ export default async function CatalogPage() {
             </ul>
           )}
           <p className="text-sm"><Link className="underline" href="/join">Join a cohort with a code</Link></p>
+        </section>
+      )}
+      {certificates.length > 0 && (
+        <section className="space-y-2" aria-labelledby="my-certificates">
+          <h2 id="my-certificates" className="text-2xl">Your certificates</h2>
+          <ul className="flex flex-wrap gap-2">
+            {certificates.map((c) => (
+              <li key={c.id}>
+                <Link href={`/certificates/${c.id}`} className="btn-secondary">{c.packTitle}{c.revokedAt ? ' (revoked)' : ''}</Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
       {challenges.length === 0 && <p className="card">No challenges have been published yet.</p>}

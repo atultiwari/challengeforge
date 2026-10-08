@@ -4,6 +4,9 @@ import { BASE_URL, E2E_ENV, PORT } from './e2e/config'
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
+  // One worker: specs share one database and site-wide settings (pack access, certificates),
+  // and the dev server compiles each route on first visit.
+  workers: 1,
   retries: process.env['CI'] ? 1 : 0,
   use: { baseURL: BASE_URL, trace: 'retain-on-failure' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
