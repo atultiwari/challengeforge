@@ -65,7 +65,7 @@ pnpm release
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | Hostinger email: `smtp.hostinger.com`, port `465`, the mailbox address and its password. |
 | `REQUIRE_EMAIL_VERIFICATION` | `true` makes new accounts confirm their email before signing in. Needs `MAIL_MODE=smtp`. Default `false`. |
 | `PAYMENTS_PROVIDER` | `none` (default), `razorpay` or `stripe`. See section 7. |
-| `TRUST_FORWARDED_HOST` | `true` only if extra domains (section 9) all show the default site: Hostinger's proxy then passes the domain in `X-Forwarded-Host`. Default `false`. |
+| `TRUST_FORWARDED_HOST` | `true` only if extra domains (section 10) all show the default site: Hostinger's proxy then passes the domain in `X-Forwarded-Host`. Default `false`. |
 | `BYOK_ENCRYPTION_KEY` | Optional. Generate with `openssl rand -base64 32`; it lets learners use their own API keys. |
 
 ## 4. First-time setup
@@ -220,8 +220,9 @@ has its own people, content, look and settings; accounts are shared.
 
 1. `pnpm release` locally.
 2. Upload the new archive in hPanel.
-3. Run `node cli.mjs migrate` (safe to run every time).
-4. Restart the app.
+3. Restart the app. It applies any new migrations as it starts
+   (`AUTO_MIGRATE`). With `AUTO_MIGRATE=false`, run `node cli.mjs migrate`
+   over SSH first (safe to run every time).
 
 Attempts in progress are pinned to the version they started on, so publishing
 changes never disturbs a learner mid-attempt.
