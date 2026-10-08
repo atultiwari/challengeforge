@@ -48,3 +48,15 @@ export function field(source: URLSearchParams, name: string, max = 4096): string
   const v = source.get(name)
   return typeof v === 'string' && v !== '' && v.length <= max ? v : undefined
 }
+
+/**
+ * Hands a verified sign-on (LTI launch, WordPress) over to /lti/session: a
+ * same-site request carrying the one-time ticket in a cookie, which creates
+ * the session and continues to `next`.
+ */
+export function handOffToSession(ticket: string, next: string, extraCookies: readonly string[] = []): Response {
+  const url = `/lti/session?next=${encodeURIComponent(next)}`
+  return ltiPage('Opening…', `<meta http-equiv="refresh" content="0;url=${escapeHtml(url)}"><p>Opening… <a href="${escapeHtml(url)}">Continue</a></p>`, {
+    headers: [...extraCookies.map((c) => ['set-cookie', c] as [string, string]), ['set-cookie', ticketCookie(ticket)]],
+  })
+}

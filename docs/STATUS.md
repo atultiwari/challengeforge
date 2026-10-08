@@ -61,7 +61,7 @@ judgement call made without the owner (review in one pass)._
 - **S1, packs in the browser: done.** Upload and download `.zip`, plus install from a checksum-verified registry. The public registry is in `registry/`.
 - **S2, xAPI: done.** Statements for the site or a cohort as JSON downloads, and an optional LRS that cron sends new statements to.
 - **S3, simulated patient: done.** Learners can ask the patient in their own words. It's grounded in the case's history list, and grading still uses what was revealed. Turned on in the demo case.
-- **S4:** WordPress connector.
+- **S4, WordPress connector: done.** A plugin with a shortcode, and single sign-on with signed, single-use tokens and members linked by WordPress id.
 - **S5:** type SDK.
 
 ## Waiting on the owner

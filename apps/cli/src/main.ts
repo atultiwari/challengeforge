@@ -16,7 +16,7 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { Command } from 'commander'
-import { advanceJob, closeStaleReservations, createDb, createSetupToken, findSiteBySlug, grantNetworkAdminUnchecked, needsSetup, userIdByEmail, purgeExpiredLti, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
+import { advanceJob, closeStaleReservations, createDb, createSetupToken, findSiteBySlug, grantNetworkAdminUnchecked, needsSetup, userIdByEmail, purgeExpiredLti, purgeSsoJtis, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
 import { createMailer, createServiceRunners, mailConfigFromEnv, pushToLrs, sendDueLtiScores, sendDueNotifications, servicesConfigFromEnv } from '@challengeforge/services'
 import { registry } from '@challengeforge/types'
 import { loadConfig } from './config'
@@ -166,7 +166,7 @@ program
         }
       }
       const closed = await closeStaleReservations(db)
-      const purged = await purgeExpiredLti(db)
+      const purged = (await purgeExpiredLti(db)) + (await purgeSsoJtis(db))
       const secret = process.env['BETTER_AUTH_SECRET']
       const scores = secret ? await sendDueLtiScores(db, secret) : { sent: 0, failed: 0 }
       const appUrl = process.env['APP_URL']?.replace(/\/$/, '')

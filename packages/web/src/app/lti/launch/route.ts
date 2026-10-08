@@ -14,7 +14,7 @@ import {
 import { AGS_SCORE_SCOPE, CLAIM, LtiLaunchError, displayName, isTeachingRole, verifyLaunch, type VerifiedLaunch } from '@challengeforge/services'
 import { db } from '@/server/db'
 import { siteContextForRequest } from '@/server/site'
-import { clearStateCookie, escapeHtml, field, LTI_STATE_COOKIE, ltiError, ltiPage, ticketCookie } from '@/server/lti'
+import { clearStateCookie, field, handOffToSession, LTI_STATE_COOKIE, ltiError } from '@/server/lti'
 import { readTextCapped } from '@/server/http'
 import { withinPublicLimit } from '@/server/limits'
 
@@ -34,16 +34,6 @@ function challengeOf(launch: VerifiedLaunch, baseUrl: string): string | null {
   return url.origin === new URL(baseUrl).origin && match && UUID.test(match[1]!) ? match[1]! : null
 }
 
-/** Hands over to /lti/session (a same-site request, carrying the ticket cookie), which signs in and goes on to `next`. */
-function handOff(ticket: string, next: string): Response {
-  const url = `/lti/session?next=${encodeURIComponent(next)}`
-  return ltiPage('Opening…', `<meta http-equiv="refresh" content="0;url=${escapeHtml(url)}"><p>Opening the activity… <a href="${escapeHtml(url)}">Continue</a></p>`, {
-    headers: [
-      ['set-cookie', clearStateCookie()],
-      ['set-cookie', ticketCookie(ticket)],
-    ],
-  })
-}
 
 async function resourceLaunch(siteId: string, baseUrl: string, launch: VerifiedLaunch, userId: string): Promise<string> {
   const p = launch.payload
@@ -105,7 +95,7 @@ export async function POST(request: Request) {
     const launch = await verifyLaunch(db(), site.id, { idToken, state, cookieState })
     const userId = await linkLtiUser(db(), site.id, launch.platform.id, launch.payload.sub, displayName(launch.payload))
     const next = launch.payload[CLAIM.messageType] === 'LtiDeepLinkingRequest' ? await deepLinkingLaunch(site.id, launch, userId) : await resourceLaunch(site.id, ctx.baseUrl, launch, userId)
-    return handOff(await createLtiTicket(db(), site.id, userId), next)
+    return handOffToSession(await createLtiTicket(db(), site.id, userId), next, [clearStateCookie()])
   } catch (err) {
     if (err instanceof LtiLaunchError || err instanceof ValidationError) return ltiError(err.message)
     console.error('[lti] launch failed', err)

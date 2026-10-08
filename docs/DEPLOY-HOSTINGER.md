@@ -191,7 +191,18 @@ LMS users get their own accounts here, linked to their LMS identity. An
 existing account is never matched by email. A course placement unlocks its
 pack for the learners it launches, even if the pack is restricted.
 
-## 9. More than one site (optional)
+## 9. WordPress (optional)
+
+The plugin in `integrations/wordpress/challengeforge` adds a
+`[challengeforge challenge="<id>"]` shortcode. Signed-in WordPress members
+arrive signed in here, linked by their WordPress id.
+
+1. Zip the `challengeforge` folder, then upload it in WordPress (Plugins → Add New → Upload) and activate it.
+2. Here, open **Admin → WordPress**, enter the WordPress Site Address and
+   copy the secret that is shown once.
+3. In WordPress, open **Settings → ChallengeForge** and paste this site's address and the secret.
+
+## 10. More than one site (optional)
 
 One installation can serve several sites, like WordPress multisite. Each site
 has its own people, content, look and settings; accounts are shared.
@@ -205,7 +216,7 @@ has its own people, content, look and settings; accounts are shared.
 4. Send the cron job's mail links per site: no change needed. Each site's
    links use its own domain.
 
-## 10. Upgrades
+## 11. Upgrades
 
 1. `pnpm release` locally.
 2. Upload the new archive in hPanel.
@@ -215,7 +226,7 @@ has its own people, content, look and settings; accounts are shared.
 Attempts in progress are pinned to the version they started on, so publishing
 changes never disturbs a learner mid-attempt.
 
-## 11. Backups
+## 12. Backups
 
 The database holds everything, including uploaded datasets and case files.
 
@@ -228,7 +239,7 @@ The database holds everything, including uploaded datasets and case files.
 
 - **Test a restore** into a scratch database once, before you need it.
 
-## 12. Operating notes
+## 13. Operating notes
 
 - **Cold starts.** Hostinger stops idle Node apps and starts them on the next
   request. The first page after a quiet period can take a few seconds.

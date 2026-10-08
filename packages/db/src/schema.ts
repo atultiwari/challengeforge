@@ -301,6 +301,9 @@ export interface Database {
   site_domains: SiteDomainsTable
   network_admins: NetworkAdminsTable
   lrs_endpoints: LrsEndpointsTable
+  wp_connections: WpConnectionsTable
+  wp_users: WpUsersTable
+  sso_jtis: SsoJtisTable
 }
 
 export type PackAccess = 'open' | 'restricted'
@@ -506,6 +509,27 @@ export interface LrsEndpointsTable {
   last_error: string | null
   last_sent_at: NullableTimestamp
   updated_at: Timestamp
+}
+
+export interface WpConnectionsTable {
+  site_id: string
+  wp_url: string
+  secret_sealed: string
+  enabled: Bool
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export interface WpUsersTable {
+  site_id: string
+  wp_user_id: string
+  user_id: string
+  created_at: Timestamp
+}
+
+export interface SsoJtisTable {
+  jti: string
+  expires_at: Timestamp
 }
 
 export interface SiteDomainsTable {
