@@ -3,6 +3,7 @@ import { auth } from '@/server/auth'
 import { fail, sameOrigin } from '@/server/http'
 import { clientIp, createRateLimiter } from '@/lib/rate-limit'
 import { rateLimitsDisabledForTests } from '@/server/test-switches'
+import { currentSettings } from '@/server/site-settings'
 
 const handlers = toNextJsHandler((request: Request) => auth().handler(request))
 
@@ -28,6 +29,9 @@ export async function POST(request: Request): Promise<Response> {
   const { pathname } = new URL(request.url)
   if (CREDENTIAL_PATHS.includes(pathname) && !rateLimitsDisabledForTests() && !credentialLimiter.allow(clientIp(request.headers))) {
     return fail(429, 'rate_limited', 'Too many attempts. Wait a minute and try again.')
+  }
+  if (pathname === '/api/auth/sign-up/email' && !(await currentSettings()).signupsOpen) {
+    return fail(403, 'signups_closed', 'This site is not taking new accounts. Ask the site administrator.')
   }
   return handlers.POST(request)
 }

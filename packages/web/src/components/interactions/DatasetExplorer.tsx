@@ -94,7 +94,7 @@ export function DatasetExplorer({
             aria-pressed={filter === id}
             className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
               filter === id
-                ? 'border-accent bg-accent text-white'
+                ? 'border-accent bg-accent text-on-accent'
                 : 'border-line bg-surface text-ink-muted hover:border-accent'
             }`}
           >

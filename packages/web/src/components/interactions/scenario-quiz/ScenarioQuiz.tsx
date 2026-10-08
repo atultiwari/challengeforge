@@ -40,7 +40,7 @@ export function ScenarioQuiz({ challengeId, config: rawConfig, onSubmit, submitt
           <div className="mt-4 space-y-3">
             <div>
               <p className="text-xs font-semibold text-ink-muted">{s.asker} asks {config.ai_name}:</p>
-              <p className="mt-1 rounded-2xl rounded-tl-sm bg-accent px-3 py-2 text-sm text-white">{s.prompt}</p>
+              <p className="mt-1 rounded-2xl rounded-tl-sm bg-accent px-3 py-2 text-sm text-on-accent">{s.prompt}</p>
             </div>
             <div>
               <p className="text-xs font-semibold text-ink-muted">{config.ai_name} answers:</p>

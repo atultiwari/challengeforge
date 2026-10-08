@@ -83,7 +83,7 @@ export function DataFlagger({ challengeId, config: rawConfig, onSubmit, submitti
                           aria-expanded={openId === id}
                           onClick={() => setOpenId(openId === id ? null : id)}
                           className={`whitespace-nowrap rounded-md border px-2 py-1 text-xs font-semibold ${
-                            flagged ? 'border-danger bg-danger text-white' : 'border-line bg-surface text-ink hover:border-accent'
+                            flagged ? 'border-danger bg-danger text-on-danger' : 'border-line bg-surface text-ink hover:border-accent'
                           }`}
                         >
                           {id}{flagged ? ` · ${label(flagged)}` : ' · Flag'}
@@ -107,7 +107,7 @@ export function DataFlagger({ challengeId, config: rawConfig, onSubmit, submitti
                                 aria-pressed={flagged === c.id}
                                 onClick={() => flag(id, c.id)}
                                 className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                                  flagged === c.id ? 'border-danger bg-danger text-white' : 'border-line bg-surface text-ink hover:border-danger'
+                                  flagged === c.id ? 'border-danger bg-danger text-on-danger' : 'border-line bg-surface text-ink hover:border-danger'
                                 }`}
                               >
                                 {c.label}

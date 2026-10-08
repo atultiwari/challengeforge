@@ -293,6 +293,8 @@ export interface Database {
   lti_link_users: LtiLinkUsersTable
   lti_deep_links: LtiDeepLinksTable
   lti_score_outbox: LtiScoreOutboxTable
+  site_settings: SiteSettingsTable
+  site_files: SiteFilesTable
 }
 
 export type PackAccess = 'open' | 'restricted'
@@ -452,6 +454,21 @@ export interface LtiScoreOutboxTable {
   next_attempt_at: Timestamp
   last_error: string | null
   created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export interface SiteSettingsTable {
+  site_id: string
+  settings: Json
+  updated_at: Timestamp
+}
+
+export interface SiteFilesTable {
+  site_id: string
+  name: string
+  content_type: string
+  bytes: Buffer
+  sha256: string
   updated_at: Timestamp
 }
 

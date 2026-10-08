@@ -24,6 +24,7 @@ export default async function AdminPage() {
             <Link className="underline" href="/admin/access">Access and payments</Link>
             <Link className="underline" href="/admin/certificates">Certificates</Link>
             <Link className="underline" href="/admin/lti">LMS (LTI)</Link>
+            <Link className="underline" href="/admin/settings">Appearance and settings</Link>
             <Link className="underline" href="/admin/audit">Audit log</Link>
           </p>
         )}

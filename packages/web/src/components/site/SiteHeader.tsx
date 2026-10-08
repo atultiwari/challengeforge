@@ -1,17 +1,20 @@
 import Link from 'next/link'
 import { hasRole, isTeacher } from '@challengeforge/db'
 import { db } from '@/server/db'
-import { currentScope, currentSite } from '@/server/scope'
+import { currentScope } from '@/server/scope'
+import { currentSettings } from '@/server/site-settings'
 import { SignOutButton } from './SignOutButton'
 
 export async function SiteHeader() {
-  const [site, { scope, user }] = await Promise.all([currentSite(), currentScope()])
+  const [settings, { scope, user }] = await Promise.all([currentSettings(), currentScope()])
   const teaches = user ? await isTeacher(db(), scope) : false
   return (
     <header className="border-b border-line bg-surface">
       <nav aria-label="Main" className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-        <Link href="/" className="font-serif text-xl font-semibold text-ink">
-          {site.name}
+        <Link href="/" className="flex items-center gap-2 font-serif text-xl font-semibold text-ink">
+          {/* eslint-disable-next-line @next/next/no-img-element -- a small, site-uploaded logo; no optimisation pipeline needed */}
+          {settings.hasLogo && <img src="/site-files/logo" alt="" className="h-8 w-auto" />}
+          {settings.name}
         </Link>
         <Link href="/" className="text-sm hover:underline">Challenges</Link>
         {hasRole(scope, 'author') && <Link href="/author" className="text-sm hover:underline">Author</Link>}
@@ -26,7 +29,7 @@ export async function SiteHeader() {
           ) : (
             <>
               <Link href="/sign-in" className="text-sm hover:underline">Sign in</Link>
-              <Link href="/sign-up" className="btn-primary">Create account</Link>
+              {settings.signupsOpen && <Link href="/sign-up" className="btn-primary">Create account</Link>}
             </>
           )}
         </div>

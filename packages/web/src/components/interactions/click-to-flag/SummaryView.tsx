@@ -93,7 +93,7 @@ export function SummaryView({
             aria-pressed={flags[id] === c.id}
             onClick={() => { onFlag(id, c.id); setOpenId(null) }}
             className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
-              flags[id] === c.id ? 'border-danger bg-danger text-white' : 'border-line bg-surface text-ink hover:border-danger'
+              flags[id] === c.id ? 'border-danger bg-danger text-on-danger' : 'border-line bg-surface text-ink hover:border-danger'
             }`}
           >
             {c.label}

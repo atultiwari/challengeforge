@@ -34,6 +34,7 @@ export type AuditAction =
   | 'certificate.revoked'
   | 'lti.platform_saved'
   | 'lti.platform_removed'
+  | 'site.settings_saved'
 
 export interface AuditEntry {
   action: AuditAction

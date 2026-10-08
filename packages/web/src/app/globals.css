@@ -22,10 +22,13 @@
   --color-accent: #1d5c51;
   --color-accent-dark: #143f38;
   --color-accent-soft: #e6efeb;
+  /* Text on an accent background: white here, dark on light accents (themes, lib/themes.ts). */
+  --color-on-accent: #ffffff;
 
   /* Red pen: findings, flags and errors - the clinician's annotation. */
   --color-danger: #a8261b;
   --color-danger-soft: #f8e7e4;
+  --color-on-danger: #ffffff;
   --color-warn: #8a5300;
   --color-warn-soft: #f8edd8;
   --color-good: #1d6b35;
@@ -96,7 +99,7 @@ h1, h2 {
   }
 
   .btn-primary {
-    @apply btn bg-accent text-white hover:bg-accent-dark;
+    @apply btn bg-accent text-on-accent hover:bg-accent-dark;
   }
   .btn-secondary {
     @apply btn border border-ink/25 bg-surface text-ink hover:border-ink hover:bg-surface;
