@@ -65,6 +65,7 @@ pnpm release
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | Hostinger email: `smtp.hostinger.com`, port `465`, the mailbox address and its password. |
 | `REQUIRE_EMAIL_VERIFICATION` | `true` makes new accounts confirm their email before signing in. Needs `MAIL_MODE=smtp`. Default `false`. |
 | `PAYMENTS_PROVIDER` | `none` (default), `razorpay` or `stripe`. See section 7. |
+| `TRUST_FORWARDED_HOST` | `true` only if extra domains (section 9) all show the default site: Hostinger's proxy then passes the domain in `X-Forwarded-Host`. Default `false`. |
 | `BYOK_ENCRYPTION_KEY` | Optional. Generate with `openssl rand -base64 32`; it lets learners use their own API keys. |
 
 ## 4. First-time setup

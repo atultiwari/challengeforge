@@ -13,7 +13,7 @@ judgement call made without the owner (review in one pass)._
 | 2 | Interactive in the product (diagnostic sims, AI missions, jobs, review queue, pack export) | ✅ Done | [PHASE-2-REPORT](PHASE-2-REPORT.md) |
 | 3 | Publishing and institutions (roles, cohorts, payments, certificates, analytics, LTI 1.3) | ✅ Done (reviewed; all high and medium findings fixed) | [PHASE-3-REPORT](PHASE-3-REPORT.md) |
 | 4 | Multi-site and themes | ✅ Done (R1–R4) | [PHASE-4-REPORT](PHASE-4-REPORT.md) |
-| 5 | Ecosystem (pack registry, type SDK, xAPI, LLM patient) | Not started | PLAN.md §8 |
+| 5 | Ecosystem (pack registry, type SDK, xAPI, LLM patient, WordPress) | 🚧 Started | [PHASE-5-PLAN](PHASE-5-PLAN.md) |
 
 **Deployed:** not yet. Hostinger's database is confirmed as **MariaDB 11.8**
 (owner, 2026-10-08), and CI and local development now test on it.
@@ -57,7 +57,12 @@ judgement call made without the owner (review in one pass)._
 
 ## In progress now
 
-- **Then Phase 5** (ecosystem): pack registry, type SDK and trust model, xAPI export, WordPress embed/SSO, and the LLM simulated patient on the diagnostic catalogue.
+**Phase 5** ([plan](PHASE-5-PLAN.md)):
+- **S1:** pack upload, download and a registry, all in the browser.
+- **S2:** xAPI export and an LRS.
+- **S3:** LLM simulated patient.
+- **S4:** WordPress connector.
+- **S5:** type SDK.
 
 ## Waiting on the owner
 
