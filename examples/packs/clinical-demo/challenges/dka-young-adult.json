@@ -933,5 +933,14 @@
     "Find the precipitant: urinary symptoms, dipstick and cultures; check for pregnancy; treat the infection.",
     "Monitor: hourly glucose and ketones, repeat venous gas at 1 hour, fluid balance; add 10% glucose when glucose falls below 14.",
     "Avoid bicarbonate, hypotonic fluids and unnecessary imaging."
-  ]
+  ],
+  "patient_chat": {
+    "enabled": true,
+    "model": {
+      "provider": "google",
+      "model": "gemini-3.1-flash-lite"
+    },
+    "persona": "A tired, frightened 19-year-old. Short answers; calls insulin \"my pens\".",
+    "max_questions": 20
+  }
 }

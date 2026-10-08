@@ -161,6 +161,15 @@ const DiagnosticSimDefBase = z.object({
   treatments: z.array(TreatmentSchema).default([]).describe('Treatments the learner can give.'),
   events: z.array(TimedEventSchema).default([]).describe('Things that happen at a set time unless the learner has acted, e.g. the patient deteriorates.'),
   gates: z.object({ differential_before_investigations: z.boolean().default(false) }).default({ differential_before_investigations: false }),
+  patient_chat: z
+    .object({
+      enabled: z.boolean().default(false),
+      model: z.object({ provider: z.string().min(1).max(40), model: z.string().min(1).max(120) }).default({ provider: 'google', model: 'gemini-3.1-flash-lite' }),
+      persona: z.string().max(1000).default('').describe('How the patient talks (e.g. "anxious, short answers, calls the medicine her sugar pills"). Facts come ONLY from the history list.'),
+      max_questions: z.number().int().positive().max(100).default(30),
+    })
+    .default({ enabled: false, model: { provider: 'google', model: 'gemini-3.1-flash-lite' }, persona: '', max_questions: 30 })
+    .describe('Let learners ask the patient in their own words. An AI model answers in character, grounded only in the history list; scoring still uses which history items were revealed. Needs clinical review.'),
   answer: z.object({
     diagnosis: z.object({
       accepted: z.array(Text).min(1).describe('Every way of writing the correct diagnosis, including abbreviations. Case and punctuation are ignored.'),
@@ -199,5 +208,7 @@ export const DiagnosticSimActionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('record_differential'), terms: z.array(z.string().min(1).max(80)).min(1).max(8) }),
   z.object({ kind: z.literal('submit_diagnosis'), text: z.string().min(1).max(120) }),
   z.object({ kind: z.literal('end') }),
+  /** Ask the patient in your own words (only when the case enables patient_chat). */
+  z.object({ kind: z.literal('converse'), text: z.string().trim().min(1).max(300) }),
 ])
 export type DiagnosticSimAction = z.infer<typeof DiagnosticSimActionSchema>

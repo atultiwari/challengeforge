@@ -19,6 +19,7 @@ import {
   type GatewayConfig,
 } from '@challengeforge/llm-gateway'
 import { BatteryPayload, BatteryProgress, ChatPayload, GradePayload } from './payloads'
+import { groundPatientAnswer, PatientPayload, patientSystemPrompt } from './patient'
 
 export const CANARY_PLACEHOLDER = '{{CANARY}}'
 /** Judge calls per attempt: one per goal plus retries, bounded. */
@@ -61,6 +62,24 @@ export function createServiceRunners(db: Db, config: ServicesConfig): { runServi
         request: { system: p.system.replaceAll(CANARY_PLACEHOLDER, canary), messages: p.messages, maxTokens: p.maxTokens, ...(p.temperature === undefined ? {} : { temperature: p.temperature }) },
       })
       return { text: result.text }
+    }
+    if (request.kind === 'patient.reply') {
+      const p = PatientPayload.parse(request.payload)
+      const messages = [
+        ...p.recent.flatMap((t) => [
+          { role: 'user' as const, content: t.question },
+          { role: 'assistant' as const, content: JSON.stringify({ reply: t.reply, matched: [] }) },
+        ]),
+        { role: 'user' as const, content: p.question },
+      ]
+      const result = await call(context, {
+        purpose: 'patient',
+        provider: p.provider,
+        model: p.model,
+        callCap: p.callCap,
+        request: { system: patientSystemPrompt(p), messages, maxTokens: 300, temperature: 0.3 },
+      })
+      return groundPatientAnswer(p, result.text)
     }
     if (request.kind === 'grade') {
       const p = GradePayload.parse(request.payload)
@@ -168,3 +187,4 @@ export * from './notifications'
 export * from './packs'
 export * from './pack-registry'
 export * from './xapi'
+export { groundPatientAnswer, patientSystemPrompt } from './patient'

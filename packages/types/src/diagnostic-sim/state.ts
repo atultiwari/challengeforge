@@ -35,6 +35,8 @@ export interface DiagnosticSimState {
   differential: readonly string[] | null
   diagnosis: string | null
   lastSearch: { category: Category; query: string; results: readonly { id: string; label: string }[] } | null
+  /** Free-text conversation with the simulated patient (absent in older attempts). */
+  conversation?: readonly { question: string; reply: string }[]
   ended: boolean
   endReason: EndReason | null
 }
@@ -52,6 +54,7 @@ export const initialState = (): DiagnosticSimState => ({
   differential: null,
   diagnosis: null,
   lastSearch: null,
+  conversation: [],
   ended: false,
   endReason: null,
 })
@@ -137,7 +140,44 @@ function applyAction(def: DiagnosticSimDef, s: DiagnosticSimState, action: Diagn
       return { ok: true, state: { ...s, diagnosis: action.text, ended: true, endReason: 'diagnosis' } }
     case 'end':
       return { ok: true, state: { ...s, ended: true, endReason: 'learner' } }
+    case 'converse':
+      // Needs the patient's reply from the server; see conversePatient.
+      return reject('needs_service', 'The patient could not answer just now. Please try again.')
   }
+}
+
+/** What the simulated patient answered, as recorded on the event (see packages/services). */
+export interface PatientReply {
+  reply: string
+  /** History item ids the question was about. Unknown ids are ignored. */
+  matched: readonly string[]
+}
+
+/**
+ * Applies a conversation turn: the reply joins the transcript, and every
+ * matched history item counts exactly as if it had been asked (revealed,
+ * timed, on the trail), so the case's criteria grade the conversation the
+ * same way as the menu-free search. The model never decides a score.
+ */
+export function conversePatient(def: DiagnosticSimDef, s: DiagnosticSimState, question: string, answer: PatientReply): StepOutcome<DiagnosticSimState> {
+  if (!def.patient_chat.enabled) return reject('not_enabled', 'This case does not include talking to the patient.')
+  const conversation = s.conversation ?? []
+  if (conversation.length >= def.patient_chat.max_questions) return reject('cap_reached', `You have asked the patient ${def.patient_chat.max_questions} questions.`)
+  const done = doneIds(s)
+  const valid = [...new Set(answer.matched)].filter((id) => def.history.some((h) => h.id === id) && !done.has(id))
+  const start = s.clock
+  const trail = [...s.trail, ...valid.map((id) => ({ seq: s.actionCount + 1, kind: 'ask', target: id, time: start }))]
+  const discovered = [...new Set([...s.discovered, ...valid.map((id) => discoveryKey('history', id))])]
+  const next: DiagnosticSimState = {
+    ...s,
+    clock: start + def.sim.minutes_per_question,
+    discovered,
+    asked: [...s.asked, ...valid],
+    trail,
+    conversation: [...conversation, { question, reply: answer.reply.slice(0, 1000) }],
+  }
+  const counted = { ...next, actionCount: s.actionCount + 1 }
+  return { ok: true, state: checkLimits(def, fireEvents(def, counted)) }
 }
 
 /** Timed events fire once the clock passes them, unless the learner already acted. */

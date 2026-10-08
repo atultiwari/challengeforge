@@ -82,6 +82,13 @@ function rubricSanity(def: DiagnosticSimDef): LintIssue[] {
       issues.push({ path: `answer.differentials.${i}.accepted`, severity: 'warning', message: 'This differential shares a term with the diagnosis.' })
     }
   })
+  if (def.patient_chat.enabled) {
+    issues.push({
+      path: 'patient_chat.enabled',
+      severity: 'warning',
+      message: 'Learners can talk to the patient through an AI model. It answers only from the history list, but review real transcripts before teaching with it.',
+    })
+  }
   return issues
 }
 

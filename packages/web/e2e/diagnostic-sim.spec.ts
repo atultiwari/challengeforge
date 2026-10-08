@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test'
 
 /** The interactive paradigm end to end: a patient worked up step by step, then graded on the path. */
 test('a learner works up the DKA case and is graded on the reasoning path', async ({ page }) => {
+  // A long journey (two full plays of the case): more than the default 30 s on a cold dev server.
+  test.setTimeout(120_000)
   page.on('dialog', (dialog) => void dialog.accept())
   await page.goto('/sign-up')
   await page.getByLabel('Your name').fill('Sim Learner')
@@ -13,10 +15,16 @@ test('a learner works up the DKA case and is graded on the reasoning path', asyn
   await page.getByRole('button', { name: 'Start' }).click()
   await expect(page.getByText(/T\+0 min/)).toBeVisible()
 
+  // Talking to the patient (simulated, grounded in the case's history list): what it reveals joins the notes.
+  await page.getByLabel('Your question to the patient').fill('When did all this start?')
+  await page.getByRole('button', { name: 'Ask the patient' }).click()
+  await expect(page.getByRole('list', { name: 'Conversation' })).toContainText('When did all this start?')
+  await expect(page.getByText('19 questions left')).toBeVisible()
+
   // Search-to-reveal: nothing is listed until the learner asks for it.
   await page.getByLabel('Search history').fill('insulin')
   await page.getByRole('button', { name: 'Search' }).click()
-  await page.getByRole('button', { name: 'Ask' }).click()
+  await page.getByRole('button', { name: 'Ask', exact: true }).click()
   await expect(page.getByText(/I stopped it yesterday/)).toBeVisible()
 
   await page.getByRole('tab', { name: 'Investigate' }).click()

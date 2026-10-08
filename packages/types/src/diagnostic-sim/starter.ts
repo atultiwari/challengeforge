@@ -39,6 +39,7 @@ export function starterDiagnosticSim(): DiagnosticSimDef {
     treatments: [],
     events: [],
     gates: { differential_before_investigations: false },
+    patient_chat: { enabled: false, model: { provider: 'google', model: 'gemini-3.1-flash-lite' }, persona: '', max_questions: 30 },
     answer: { diagnosis: { accepted: ['the diagnosis', 'its abbreviation'] }, differentials: [], min_differentials: 0 },
     rubric: {
       weights: { history: 20, examination: 10, investigations: 10, efficiency: 0, diagnosis: 60, differentials: 0, management: 0 },

@@ -32,6 +32,8 @@ export interface DiagnosticSimView {
   search: DiagnosticSimState['lastSearch']
   differential: readonly string[] | null
   differentialRequired: boolean
+  /** Present when the case lets learners talk to the patient. */
+  patientChat?: { conversation: readonly { question: string; reply: string }[]; remaining: number }
   ended: boolean
   endReason?: EndReason
   debrief?: string
@@ -73,6 +75,9 @@ export function viewOf(def: DiagnosticSimDef, s: DiagnosticSimState): Diagnostic
     search: s.lastSearch,
     differential: s.differential === null ? null : [...s.differential],
     differentialRequired: def.gates.differential_before_investigations,
+    ...(def.patient_chat.enabled
+      ? { patientChat: { conversation: [...(s.conversation ?? [])], remaining: Math.max(0, def.patient_chat.max_questions - (s.conversation ?? []).length) } }
+      : {}),
     ended: s.ended,
   }
   if (!s.ended) return base

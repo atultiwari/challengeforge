@@ -72,8 +72,8 @@ describe('authoring: the doctor-shaped case is valid data', () => {
     expect(def.review.status).toBe('draft')
   })
 
-  it('passes lint', () => {
-    expect(diagnosticSim.lint(def)).toEqual([])
+  it('passes lint (its only note: patient chat needs transcript review)', () => {
+    expect(diagnosticSim.lint(def).map((i) => `${i.severity} ${i.path}`)).toEqual(['warning patient_chat.enabled'])
   })
 
   it('the schema itself refuses an id used in two catalogs', () => {

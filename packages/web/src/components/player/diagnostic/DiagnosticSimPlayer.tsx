@@ -6,6 +6,7 @@ import { ActionTabs } from './ActionTabs'
 import { CaseNotes } from './CaseNotes'
 import { DecisionPanel } from './DecisionPanel'
 import { PatientPanel } from './PatientPanel'
+import { PatientChat } from './PatientChat'
 
 const END_TEXT: Record<string, string> = {
   diagnosis: 'You submitted your diagnosis.',
@@ -39,6 +40,7 @@ export function DiagnosticSimPlayer({ view, send, busy }: { view: DiagnosticSimV
       ) : (
         <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
           <div className="space-y-6">
+            {view.patientChat && <PatientChat chat={view.patientChat} send={send} busy={busy} />}
             <ActionTabs view={view} send={send} busy={busy} />
             <DecisionPanel view={view} send={send} busy={busy} />
           </div>
