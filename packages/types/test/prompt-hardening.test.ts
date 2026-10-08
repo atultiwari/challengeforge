@@ -71,3 +71,12 @@ describe('prompt-hardening', () => {
     expect(await act(promptHardening, def, attempt, { kind: 'save_prompt', text: 'y'.repeat(4000) }, env)).toMatchObject({ ok: false, error: { typeCode: 'too_long' } })
   })
 })
+
+describe('prompt-hardening options', () => {
+  it('starts from the author\'s starter instructions and shows the locked part\'s description', () => {
+    const withStarter = promptHardening.definitionSchema.parse({ ...def, starter_prompt: 'Be helpful.', locked_base_display: 'The bot already knows the shop hours.' })
+    const state = promptHardening.init(withStarter, ctx)
+    expect(state.prompt).toBe('Be helpful.')
+    expect(promptHardening.view(withStarter, state).lockedBaseDisplay).toBe('The bot already knows the shop hours.')
+  })
+})

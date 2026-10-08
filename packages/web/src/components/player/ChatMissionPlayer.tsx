@@ -42,6 +42,15 @@ export function ChatMissionPlayer({ view, send, busy }: { view: ChatMissionView;
             if (text.trim() && (await send({ kind: 'send', text: text.trim() }))) setText('')
           }}
         >
+          {view.transcript.length === 0 && view.starters.length > 0 && (
+            <div className="flex flex-wrap gap-2" aria-label="Suggested openers">
+              {view.starters.map((s) => (
+                <button key={s} type="button" className="pill bg-surface-sunken text-ink hover:bg-accent-soft" onClick={() => setText(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
           <label className="block">
             <span className="field-label">Your message</span>
             <textarea className="field-input min-h-20" value={text} maxLength={view.maxMessageChars} onChange={(e) => setText(e.target.value)} disabled={busy || left <= 0} />

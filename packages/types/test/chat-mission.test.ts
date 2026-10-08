@@ -108,3 +108,14 @@ describe('chat-mission play', () => {
     })
   })
 })
+
+describe('chat-mission options', () => {
+  it('offers suggested openers and can route results to an instructor', async () => {
+    const reviewed = chatMission.definitionSchema.parse({ ...def, starters: ['Try asking about refunds'], needs_review: true })
+    expect(chatMission.view(reviewed, chatMission.init(reviewed, ctx)).starters).toEqual(['Try asking about refunds'])
+    const verdict = { correct: true, outcomes: [{ passed: true, message: 'ok' }, { passed: false, message: 'no' }], pointsPenalty: 0, foundIds: [] }
+    const state = { transcript: [], messagesUsed: 0, finishedAt: env.at, verdict }
+    expect((await chatMission.evaluate(reviewed, [], state, { ctx, services: {} })).status).toBe('pending_review')
+    expect((await chatMission.evaluate(def, [], state, { ctx, services: {} })).status).toBe('auto')
+  })
+})

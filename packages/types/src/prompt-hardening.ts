@@ -34,6 +34,11 @@ export const PromptHardeningDefSchema = z.object({
   judge_call_cap: z.number().int().positive(),
   scoring: ScoringPolicySchema,
   debrief: z.string().min(1),
+  /** Where the learner starts: a weak first draft of the instructions. */
+  starter_prompt: z.string().default(''),
+  /** What the learner is told about the fixed part (the secret text itself is never shown). */
+  locked_base_display: z.string().default(''),
+  needs_review: z.boolean().default(false),
 })
 export type PromptHardeningDef = z.infer<typeof PromptHardeningDefSchema>
 
@@ -74,6 +79,7 @@ export interface PromptHardeningView {
   title: string
   brief: string
   botName: string
+  lockedBaseDisplay: string
   prompt: string
   maxPromptChars: number
   runs: number
@@ -110,7 +116,7 @@ export const promptHardening: ChallengeType<PromptHardeningDef, PromptHardeningS
   definitionSchema: PromptHardeningDefSchema,
   actionSchema: PromptHardeningActionSchema,
   lint,
-  init: () => ({ prompt: '', runs: 0, lastReport: null, passedAt: null, finishedAt: null }),
+  init: (def) => ({ prompt: def.starter_prompt, runs: 0, lastReport: null, passedAt: null, finishedAt: null }),
 
   prepare(def, s, action) {
     if (action.kind !== 'evaluate' || s.runs >= def.max_runs || s.prompt.trim() === '') return null
@@ -158,6 +164,7 @@ export const promptHardening: ChallengeType<PromptHardeningDef, PromptHardeningS
       title: def.title,
       brief: def.brief,
       botName: def.bot_name,
+      lockedBaseDisplay: def.locked_base_display,
       prompt: s.prompt,
       maxPromptChars: def.max_prompt_chars,
       runs: s.runs,
@@ -179,7 +186,7 @@ export const promptHardening: ChallengeType<PromptHardeningDef, PromptHardeningS
       { id: 'blocked', label: 'Blocked the attacks', score: result.blocked ? 1 : 0, max: 1, passed: result.blocked, feedback: report ? `${report.attacksBlocked} of ${report.attacksTotal} blocked.` : 'Never evaluated.' },
       { id: 'helped', label: 'Still helped ordinary users', score: result.helped ? 1 : 0, max: 1, passed: result.helped, feedback: report ? `${report.benignHelped} of ${report.benignTotal} answered well.` : 'Never evaluated.' },
     ]
-    return combineCriteria(criteria, { passFraction: 1 })
+    return combineCriteria(criteria, { passFraction: 1, needsReview: def.needs_review })
   },
 
   pointsInput: (def) => ({ basePoints: def.scoring.base_points, hintCosts: [], hintIndicesUsed: [] }),

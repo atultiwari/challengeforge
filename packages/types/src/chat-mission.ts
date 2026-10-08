@@ -45,6 +45,10 @@ export const ChatMissionDefSchema = z.object({
   judge_framing: z.string().optional(),
   scoring: ScoringPolicySchema,
   debrief: z.string().min(1),
+  /** Suggested opening messages a learner can pick. */
+  starters: z.array(z.string().min(1)).default([]),
+  /** Send judged results to an instructor to confirm before they are final. */
+  needs_review: z.boolean().default(false),
 })
 export type ChatMissionDef = z.infer<typeof ChatMissionDefSchema>
 
@@ -74,6 +78,7 @@ export interface ChatMissionView {
   messagesUsed: number
   messageCap: number
   maxMessageChars: number
+  starters: readonly string[]
   finished: boolean
   goals?: readonly { label: string; passed: boolean; message: string }[]
   debrief?: string
@@ -114,6 +119,7 @@ function view(def: ChatMissionDef, s: ChatMissionState): ChatMissionView {
     messagesUsed: s.messagesUsed,
     messageCap: def.message_cap,
     maxMessageChars: def.max_message_chars,
+    starters: [...def.starters],
     finished: s.finishedAt !== null,
   }
   if (!s.finishedAt || !s.verdict) return base
@@ -189,7 +195,7 @@ export const chatMission: ChallengeType<ChatMissionDef, ChatMissionState, ChatMi
       passed: o.passed,
       feedback: o.message,
     }))
-    return { ...combineCriteria(criteria, { passFraction: 0 }), passed: final.verdict?.correct === true }
+    return { ...combineCriteria(criteria, { passFraction: 0, needsReview: def.needs_review }), passed: final.verdict?.correct === true }
   },
 
   pointsInput: (def) => ({ basePoints: def.scoring.base_points, hintCosts: [], hintIndicesUsed: [] }),

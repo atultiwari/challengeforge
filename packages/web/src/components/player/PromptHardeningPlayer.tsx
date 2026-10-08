@@ -27,6 +27,11 @@ export function PromptHardeningPlayer({ view, pendingJob, send, busy }: { view: 
 
       {!view.finished && (
         <section className="card space-y-3">
+          {view.lockedBaseDisplay && (
+            <p className="rounded-md bg-surface-sunken px-3 py-2 text-sm">
+              <span className="font-semibold">Already in {view.botName}&apos;s instructions (you cannot change this):</span> {view.lockedBaseDisplay}
+            </p>
+          )}
           <label className="block">
             <span className="field-label">Your instructions for {view.botName}</span>
             <textarea className="field-input min-h-40 font-mono text-sm" value={text} maxLength={view.maxPromptChars} disabled={running} onChange={(e) => setText(e.target.value)} />
