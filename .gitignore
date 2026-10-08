@@ -13,6 +13,7 @@ dist/
 .next/
 next-env.d.ts
 .next-e2e/
+.e2e-mail/
 test-results/
 playwright-report/
 release/

@@ -8,6 +8,7 @@ export function AuthForm({ mode, next }: { mode: 'sign-in' | 'sign-up'; next: st
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [checkEmail, setCheckEmail] = useState(false)
 
   async function onSubmit(form: FormData) {
     setBusy(true)
@@ -23,10 +24,23 @@ export function AuthForm({ mode, next }: { mode: 'sign-in' | 'sign-up'; next: st
       setError(result.error.message ?? 'That did not work. Check your details and try again.')
       return
     }
+    // A site that requires confirmed emails creates the account without a session.
+    if (mode === 'sign-up' && !result.data?.token) {
+      setCheckEmail(true)
+      return
+    }
     router.push(safeNext(next))
     router.refresh()
   }
 
+  if (checkEmail) {
+    return (
+      <div role="status" className="card mx-auto max-w-md space-y-2">
+        <p className="font-medium">Check your email.</p>
+        <p className="text-sm">We sent a link to confirm your address. Open it to finish creating your account.</p>
+      </div>
+    )
+  }
   return (
     <form action={onSubmit} className="card mx-auto max-w-md space-y-4">
       {mode === 'sign-up' && (

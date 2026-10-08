@@ -15,6 +15,7 @@ export default async function AdminPage() {
       <header>
         <p className="eyebrow">Admin</p>
         <h1 className="text-4xl">Site administration</h1>
+        <p className="mt-2 text-sm"><Link className="underline" href="/admin/audit">Audit log</Link></p>
       </header>
       <section className="space-y-3">
         <h2 className="text-2xl">Results waiting for review</h2>

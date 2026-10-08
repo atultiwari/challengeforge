@@ -9,7 +9,9 @@ const EnvSchema = z.object({
   SITE_SLUG: z.string().min(1).default('main'),
   SITE_NAME: z.string().min(1).default('ChallengeForge'),
   DB_CONNECTION_LIMIT: z.coerce.number().int().positive().max(50).default(5),
-  // Model settings (LLM_MODE, provider keys, BYOK, CANARY_SECRET) are validated by packages/services.
+  /** New accounts must confirm their email before signing in (needs outgoing mail). */
+  REQUIRE_EMAIL_VERIFICATION: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  // Model settings (LLM_MODE, provider keys, BYOK, CANARY_SECRET) and mail (MAIL_*, SMTP_*) are validated by packages/services.
 })
 export type Env = z.infer<typeof EnvSchema>
 

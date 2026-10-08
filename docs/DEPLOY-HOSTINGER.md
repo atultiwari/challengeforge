@@ -1,7 +1,7 @@
 # Deploying ChallengeForge on Hostinger (Node.js hosting + database)
 
 This runbook covers a Hostinger plan with **Node.js web apps** (Business or
-Cloud). The same steps work on any Node 20+ host with MySQL 8 or MariaDB 10.6+.
+Cloud). The same steps work on any Node 20+ host with MySQL 8 or MariaDB 10.11+ (Hostinger: MariaDB 11.8).
 
 > **Verified so far:**
 > - the release archive builds;
@@ -20,7 +20,7 @@ Cloud). The same steps work on any Node 20+ host with MySQL 8 or MariaDB 10.6+.
 |---|---|
 | `server.js` | Entry file. Starts the Next.js standalone server. |
 | `packages/web/` | The compiled app, with its trimmed `node_modules`. |
-| `cli.mjs` | Operator commands (one file): `migrate`, `import-pack`, `publish-pack`, `create-admin`, `reset-password`. |
+| `cli.mjs` | Operator commands (one file): `migrate`, `import-pack`, `publish-pack`, `export-pack`, `create-admin`, `reset-password`, `run-jobs`. |
 
 The host builds nothing. You upload a prebuilt, tested archive. This avoids
 depending on Hostinger building a pnpm monorepo, which its docs do not cover.
@@ -29,8 +29,8 @@ depending on Hostinger building a pnpm monorepo, which its docs do not cover.
 
 1. Create a database and a database user, and note the **name**, **user**,
    **password** and **host**. The host is usually `localhost` from the Node app.
-2. In phpMyAdmin, run `SELECT VERSION();` and note the result in PLAN.md §7.
-   MariaDB 10.6+ and MySQL 8 are both supported.
+2. Hostinger runs **MariaDB 11.8** (confirmed 2026-10-08), which CI tests on
+   every push. MariaDB 10.11+ and MySQL 8 are also supported.
 
 ## 2. Build the release (on your computer or in CI)
 
@@ -60,6 +60,10 @@ pnpm release
 | `LLM_MODE` | `live` to call real AI providers. A production site refuses to start on `mock` (canned replies) unless `ALLOW_MOCK_LLM_IN_PRODUCTION=true`, which is for demo sites only. |
 | `GOOGLE_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | Keys for the providers your AI missions pin. Needed only with `LLM_MODE=live`. Only models with a price in the provider configuration may run on the site's keys. |
 | `LLM_BUDGET_USD_PER_USER` | Spend cap per learner on the site's keys. Default `2`. |
+| `MAIL_MODE` | `smtp` to send password-reset and confirmation emails. Without it, the site sends no mail and hides "Forgot your password?". |
+| `MAIL_FROM` | e.g. `Your Site <no-reply@your-domain.example>`. Use a mailbox you created in hPanel → Emails. |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | Hostinger email: `smtp.hostinger.com`, port `465`, the mailbox address and its password. |
+| `REQUIRE_EMAIL_VERIFICATION` | `true` makes new accounts confirm their email before signing in. Needs `MAIL_MODE=smtp`. Default `false`. |
 | `BYOK_ENCRYPTION_KEY` | Optional. Generate with `openssl rand -base64 32`; it lets learners use their own API keys. |
 
 ## 4. First-time setup (hPanel → Advanced → SSH access)
@@ -145,17 +149,20 @@ The database holds everything, including uploaded datasets and case files.
   request. The first page after a quiet period can take a few seconds.
 - **Rate limits are in memory.** They reset when the app is idled. They blunt
   bursts; they are not an accounting system.
-- **No outgoing email yet (Phase 1).** There is no "forgot password" link. To
-  reset someone's password:
+- **Password resets.** With `MAIL_MODE=smtp`, learners reset their own
+  password from "Forgot your password?". Without mail, or for a locked-out
+  admin, reset it from SSH:
 
   ```bash
   NEW_PASSWORD='...' node cli.mjs reset-password --email them@example.com
   ```
 
   This also signs them out everywhere.
-- **Request timeouts.** Phase 1 requests are short. The long AI evaluations in
-  Phase 2 will run as resumable jobs (PLAN.md §7), so they do not depend on
-  Hostinger's undocumented proxy timeout.
+- **Request timeouts.** Requests are short. Long AI evaluations run as
+  resumable jobs (section 6), so they do not depend on Hostinger's
+  undocumented proxy timeout.
+- **Audit log.** Admin → Audit log lists role changes, publishing, review
+  overrides, pack imports and password resets.
 
 ## Troubleshooting
 

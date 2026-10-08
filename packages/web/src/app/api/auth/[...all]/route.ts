@@ -12,7 +12,14 @@ const handlers = toNextJsHandler((request: Request) => auth().handler(request))
  * address (Better Auth's own limiter may trust a client-supplied header).
  */
 const credentialLimiter = createRateLimiter(10, 60_000)
-const CREDENTIAL_PATHS = ['/api/auth/sign-in/email', '/api/auth/sign-up/email']
+const CREDENTIAL_PATHS = [
+  '/api/auth/sign-in/email',
+  '/api/auth/sign-up/email',
+  // These send mail or spend a token: limit them like sign-in, so they cannot be used to flood an inbox.
+  '/api/auth/request-password-reset',
+  '/api/auth/reset-password',
+  '/api/auth/send-verification-email',
+]
 
 export const GET = handlers.GET
 

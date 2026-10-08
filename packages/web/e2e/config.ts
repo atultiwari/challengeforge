@@ -3,6 +3,8 @@ export const SERVER_URL = process.env['TEST_DB_URL'] ?? 'mysql://root:devroot@12
 export const E2E_DB = 'cf_e2e'
 export const PORT = 3200
 export const BASE_URL = `http://localhost:${PORT}`
+/** Outgoing mail lands here as JSON files during E2E (MAIL_MODE=file is refused in production). */
+export const MAIL_OUTBOX = `${process.cwd()}/.e2e-mail`
 
 export const E2E_ENV: Record<string, string> = {
   DATABASE_URL: `${SERVER_URL}/${E2E_DB}`,
@@ -14,4 +16,6 @@ export const E2E_ENV: Record<string, string> = {
   NEXT_DIST_DIR: '.next-e2e',
   // Many sign-ups in seconds; ignored by the app whenever NODE_ENV is production.
   DISABLE_RATE_LIMITS_FOR_TESTS: 'true',
+  MAIL_MODE: 'file',
+  MAIL_OUTBOX_DIR: MAIL_OUTBOX,
 }
