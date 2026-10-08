@@ -1,0 +1,45 @@
+{
+  "title": "The headline-accuracy trap (synthetic)",
+  "story_brief": "A vendor claims their screening tool is 92% accurate. Check the validation cohort before anyone signs.",
+  "interaction": "metrics_dashboard",
+  "interaction_config": {
+    "outcome_labels": ["Sensitivity", "Explanation"],
+    "answer": {
+      "numeric": { "field": "sensitivity", "label": "What is the tool's sensitivity?", "unit": "%" },
+      "choice": {
+        "field": "explanation",
+        "label": "Why is the headline figure misleading?",
+        "options": [
+          { "id": "opt_a", "text": "The threshold is set too low." },
+          { "id": "opt_b", "text": "The condition is rare, so saying 'no' to everyone is usually right." },
+          { "id": "opt_c", "text": "The cohort is too small to mean anything." }
+        ]
+      }
+    }
+  },
+  "rule": {
+    "type": "all_of",
+    "rules": [
+      {
+        "type": "numeric_range",
+        "field": "sensitivity",
+        "expected": 41,
+        "tolerance": 2,
+        "unit": "%",
+        "common_mistakes": [{ "value": 92, "tolerance": 0.5, "message": "That is the overall accuracy, not the sensitivity." }]
+      },
+      { "type": "exact", "field": "explanation", "expected": "opt_b" }
+    ]
+  },
+  "scoring": {
+    "base_points": 100,
+    "hint_costs": [10, 20],
+    "wrong_attempt_penalty": 10,
+    "reveal_after_attempts": 3
+  },
+  "hints": ["Sensitivity only looks at people who truly have the condition.", "Count the true positives and the false negatives."],
+  "debrief": "Accuracy hides poor sensitivity when the condition is rare.",
+  "review_items": [
+    { "id": "sensitivity", "label": "Sensitivity", "explanation": "True positives divided by everyone with the condition." }
+  ]
+}

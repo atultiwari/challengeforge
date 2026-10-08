@@ -36,6 +36,12 @@ export interface StepEnv {
   recorded?: unknown
 }
 
+/** What evaluate() gets: the attempt's fixed facts plus services (for judged criteria). */
+export interface EvaluateEnv {
+  ctx: AttemptCtx
+  services: Services
+}
+
 export interface StepError {
   code: string
   /** Learner-safe. */
@@ -74,7 +80,11 @@ export interface ChallengeType<Def, State, Action, View> {
   /** The ONLY projection of state that may reach the learner (default-deny, PLAN.md §3.4). */
   view(def: Def, state: State): View
   isTerminal(def: Def, state: State): boolean
-  evaluate(def: Def, trajectory: readonly AttemptEvent<Action>[], final: State, services: Services): Promise<Assessment>
+  /**
+   * Grades the whole attempt against the CURRENT definition, so correcting an
+   * answer key or rubric and re-running evaluate() re-grades past attempts.
+   */
+  evaluate(def: Def, trajectory: readonly AttemptEvent<Action>[], final: State, env: EvaluateEnv): Promise<Assessment>
 }
 
 /** A type with its generics erased, for registries that hold many types. */

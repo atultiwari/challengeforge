@@ -78,6 +78,11 @@ describe('before', () => {
     expect(before({ id: 't', label: 'Ketones within 30 min', weight: 10, first: 'i_ketones', byTime: 30 }, path).passed).toBe(false)
   })
 
+  it('accepts any of several items as the first step (e.g. potassium from a gas OR a lab panel)', () => {
+    expect(before({ id: 'k', label: 'x', weight: 10, first: ['i_ue', 'i_potassium'], then: 'm_insulin' }, path).passed).toBe(true)
+    expect(before({ id: 'k', label: 'x', weight: 10, first: ['i_ue', 'i_ketones'], then: 'm_insulin' }, path).passed).toBe(false)
+  })
+
   it('can be critical', () => {
     expect(before({ id: 'k', label: 'x', weight: 0, first: 'm_insulin', then: 'i_potassium', critical: true }, path)).toMatchObject({
       critical: true,

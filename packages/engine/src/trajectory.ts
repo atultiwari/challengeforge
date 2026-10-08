@@ -27,10 +27,14 @@ interface BaseSpec {
 }
 
 const nameOf = (spec: BaseSpec, id: string): string => spec.labels?.[id] ?? id
+const firstNames = (spec: BeforeSpec): string =>
+  (typeof spec.first === 'string' ? [spec.first] : spec.first).map((id) => nameOf(spec, id)).join(' or ')
 const criticalFlag = (spec: BaseSpec): Pick<Criterion, 'critical'> => (spec.critical ? { critical: true } : {})
 
-function firstIndex(steps: readonly TrajectoryStep[], target: string): number {
-  return steps.findIndex((s) => s.target === target)
+/** Index of the earliest step acting on any of the targets, or -1. */
+function firstIndex(steps: readonly TrajectoryStep[], targets: string | readonly string[]): number {
+  const wanted = typeof targets === 'string' ? [targets] : targets
+  return steps.findIndex((s) => wanted.includes(s.target))
 }
 
 export interface CoverageSpec extends BaseSpec {
@@ -83,7 +87,8 @@ export function avoided(spec: AvoidedSpec, steps: readonly TrajectoryStep[]): Cr
 }
 
 export interface BeforeSpec extends BaseSpec {
-  first: string
+  /** One item, or any of several (the earliest counts). */
+  first: string | readonly string[]
   /** `first` must happen before this, if this happens. */
   then?: string
   /** `first` must happen at or before this simulated time. */
@@ -109,7 +114,7 @@ export function before(spec: BeforeSpec, steps: readonly TrajectoryStep[]): Crit
     score: passed ? spec.weight : 0,
     max: spec.weight,
     passed,
-    feedback: passed ? 'Done in time.' : `${nameOf(spec, spec.first)} was not done when it needed to be.`,
+    feedback: passed ? 'Done in time.' : `${firstNames(spec)} was not done when it needed to be.`,
     ...criticalFlag(spec),
   }
 }

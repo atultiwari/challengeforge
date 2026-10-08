@@ -105,7 +105,7 @@ export async function assess<D, S, A, V>(
   if (attempt.status !== 'terminal') {
     throw new Error(`Attempt ${attempt.ctx.attemptId} is still open; end it before assessing.`)
   }
-  return type.evaluate(def, events, attempt.state, services)
+  return type.evaluate(def, events, attempt.state, { ctx: attempt.ctx, services })
 }
 
 export type ReplayResult<S> =
