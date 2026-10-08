@@ -11,6 +11,7 @@ import { toBool } from '../json'
 import { ForbiddenError, NotFoundError, ValidationError, hasRole, requireSignedIn, type Scope } from '../scope'
 import type { CohortRole } from '../schema'
 import { recordAudit } from './audit'
+import { queueNotification } from './notifications'
 import { normaliseEmail, type EmailLookup } from './people'
 import { orgRoleOf, requireOrgRole } from './orgs'
 
@@ -150,11 +151,14 @@ export async function joinCohort(db: Db, scope: Scope, code: string): Promise<Co
   if (!row || !toBool(row.joining_open) || toBool(row.archived)) throw new ValidationError('That code is not valid, or the cohort is not taking new people.')
   const now = new Date()
   await db.transaction().execute(async (trx) => {
-    await trx
+    const joined = await trx
       .insertInto('cohort_members')
       .values({ cohort_id: row.id, user_id: p.userId, site_id: scope.siteId, role: 'learner', joined_at: now })
       .ignore()
-      .execute()
+      .executeTakeFirst()
+    if (Number(joined.numInsertedOrUpdatedRows ?? 0) > 0) {
+      await queueNotification(trx, scope.siteId, p.userId, 'cohort_joined', { cohortId: row.id, cohortName: row.name, orgName: row.org_name }, now)
+    }
     await trx
       .insertInto('org_members')
       .values({ org_id: row.org_id, user_id: p.userId, site_id: scope.siteId, role: 'member', created_at: now })

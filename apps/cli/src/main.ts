@@ -16,7 +16,7 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { Command } from 'commander'
 import { advanceJob, closeStaleReservations, createDb, createSetupToken, needsSetup, purgeExpiredLti, exportFiles, exportPack, ensureSite, grantRoleUnchecked, importPack, listRunnableJobIds, migrateToLatest, publish, ValidationError, type Scope } from '@challengeforge/db'
-import { createServiceRunners, sendDueLtiScores, servicesConfigFromEnv } from '@challengeforge/services'
+import { createMailer, createServiceRunners, mailConfigFromEnv, sendDueLtiScores, sendDueNotifications, servicesConfigFromEnv } from '@challengeforge/services'
 import { registry } from '@challengeforge/types'
 import { loadConfig } from './config'
 import { loadPackFromDirectory } from './pack-loader'
@@ -153,9 +153,12 @@ program
       const purged = await purgeExpiredLti(db)
       const secret = process.env['BETTER_AUTH_SECRET']
       const scores = secret ? await sendDueLtiScores(db, secret) : { sent: 0, failed: 0 }
+      const appUrl = process.env['APP_URL']?.replace(/\/$/, '')
+      const mail = appUrl ? await sendDueNotifications(db, createMailer(mailConfigFromEnv(process.env)), appUrl) : { sent: 0, skipped: 0, failed: 0 }
       process.stdout.write(
         `Advanced ${slices} job slices; closed ${closed} stale AI call reservations; ` +
-          `sent ${scores.sent} LMS scores (${scores.failed} to retry); removed ${purged} expired LMS launch records.\n`,
+          `sent ${scores.sent} LMS scores (${scores.failed} to retry); sent ${mail.sent} notification emails ` +
+          `(${mail.skipped} skipped, ${mail.failed} to retry); removed ${purged} expired LMS launch records.\n`,
       )
     }),
   )

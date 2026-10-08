@@ -12,6 +12,7 @@ import type { Db } from '../client'
 import { toBool } from '../json'
 import { NotFoundError, ValidationError, requireRole, requireSignedIn, type Scope } from '../scope'
 import { recordAudit } from './audit'
+import { queueNotification } from './notifications'
 
 export interface Certificate {
   id: string
@@ -129,7 +130,9 @@ async function issueForPack(trx: Db, siteId: string, userId: string, packId: str
     // Two results finishing the pack at once: the unique key keeps exactly one.
     .ignore()
     .executeTakeFirst()
-  return Number(result.numInsertedOrUpdatedRows ?? 0) > 0 ? id : null
+  if (Number(result.numInsertedOrUpdatedRows ?? 0) === 0) return null
+  await queueNotification(trx, siteId, userId, 'certificate_issued', { certificateId: id, packTitle }, now)
+  return id
 }
 
 /**

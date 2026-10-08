@@ -296,6 +296,8 @@ export interface Database {
   site_settings: SiteSettingsTable
   site_files: SiteFilesTable
   setup_tokens: SetupTokensTable
+  notifications: NotificationsTable
+  mail_preferences: MailPreferencesTable
 }
 
 export type PackAccess = 'open' | 'restricted'
@@ -463,6 +465,27 @@ export interface LtiScoreOutboxTable {
 export interface SiteSettingsTable {
   site_id: string
   settings: Json
+  updated_at: Timestamp
+}
+
+export interface NotificationsTable {
+  id: string
+  site_id: string
+  user_id: string
+  kind: string
+  payload: Json
+  status: 'pending' | 'sent' | 'skipped' | 'failed'
+  failures: number
+  next_attempt_at: Timestamp
+  last_error: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+export interface MailPreferencesTable {
+  site_id: string
+  user_id: string
+  updates: Bool
   updated_at: Timestamp
 }
 

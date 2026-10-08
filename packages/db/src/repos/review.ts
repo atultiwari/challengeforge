@@ -11,6 +11,7 @@ import { toBool } from '../json'
 import { ForbiddenError, NotFoundError, hasRole, requireSignedIn, type Scope } from '../scope'
 import { getAttempt, type AttemptDeps, type AttemptSnapshot } from './attempts'
 import { recordAudit } from './audit'
+import { queueNotification } from './notifications'
 import { afterFinalResult, recomputeProgress } from './results'
 import { canReviewAsInstructor, instructorCanReviewSql } from './cohort-progress'
 import { isTeacher } from './orgs'
@@ -91,6 +92,8 @@ export async function overrideAssessment(db: Db, scope: Scope, attemptId: string
     if (Number(decided.numUpdatedRows) !== 1) throw new NotFoundError('No result is waiting for review here.')
     await recomputeProgress(trx, scope.siteId, attempt.userId, attempt.challengeId)
     await afterFinalResult(trx, scope.siteId, attempt.userId, attempt.challengeId, override.passed, now)
+    const title = await trx.selectFrom('challenges').select('title').where('id', '=', attempt.challengeId).executeTakeFirst()
+    await queueNotification(trx, scope.siteId, attempt.userId, 'review_decided', { challengeId: attempt.challengeId, challengeTitle: title?.title ?? '', passed: override.passed }, now)
     await recordAudit(trx, scope, { action: 'assessment.overridden', targetType: 'attempt', targetId: attemptId, details: { passed: override.passed, points: override.passed ? points : 0 } })
   })
 }

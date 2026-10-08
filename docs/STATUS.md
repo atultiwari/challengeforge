@@ -52,7 +52,7 @@ judgement call made without the owner (review in one pass)._
 ## Test totals (latest local run)
 
 - 464 unit tests.
-- 127 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
+- 129 database tests on **each** of MySQL 8.0 and MariaDB 11.8. CI also runs MariaDB 10.11.
 - 17 Playwright end-to-end journeys (16 on the main site, plus one on a fresh install), against MariaDB 11.8 in CI. They include a simulated LMS and the mock payment checkout.
 
 ## In progress now
@@ -60,7 +60,7 @@ judgement call made without the owner (review in one pass)._
 **Phase 4** ([plan](PHASE-4-PLAN.md)):
 - **R1, settings and themes: done** (presets, a WCAG-checked custom accent, logo, footer, sign-ups switch; E2E covers it).
 - **R2, setup wizard: done.** Install entirely in the browser: the server migrates on start, and `/setup` with a setup token creates the first admin. E2E runs it on a fresh, empty install.
-- **R3:** notifications.
+- **R3, notifications: done.** Emails for a certificate issued, a review decided and a cohort joined, sent by cron with retries. Learners opt out on their Account page.
 - **R4:** multi-site.
 
 ## Waiting on the owner

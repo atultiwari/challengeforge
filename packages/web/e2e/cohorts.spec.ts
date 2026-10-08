@@ -27,7 +27,7 @@ test('an organisation runs a cohort: instructor assigns work, a learner joins by
 
   // The instructor creates a cohort and assigns a challenge with a due date.
   await signIn(page, teacher.email, PASSWORD)
-  await page.getByRole('link', { name: 'Teach' }).click()
+  await page.getByRole('link', { name: 'Teach', exact: true }).click()
   await page.waitForLoadState('networkidle')
   await page.getByLabel('Name', { exact: true }).fill('Year 3, 2026')
   await page.getByRole('button', { name: 'Create cohort' }).click()

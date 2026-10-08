@@ -82,3 +82,9 @@ export async function deleteSiteFile(db: Db, scope: Scope, name: string): Promis
   requireRole(scope, 'admin')
   await db.deleteFrom('site_files').where('site_id', '=', scope.siteId).where('name', '=', name).execute()
 }
+
+/** The name a site shows (its settings, else the name it was created with). */
+export async function siteDisplayName(db: Db, siteId: string): Promise<string> {
+  const site = await db.selectFrom('sites').select('name').where('id', '=', siteId).executeTakeFirst()
+  return (await getSiteSettings(db, siteId, { name: site?.name ?? 'ChallengeForge' })).name
+}

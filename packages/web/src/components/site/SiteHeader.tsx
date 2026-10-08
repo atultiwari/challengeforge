@@ -23,7 +23,7 @@ export async function SiteHeader() {
         <div className="ml-auto flex items-center gap-4">
           {user ? (
             <>
-              <span className="text-sm text-ink-muted">{user.name}</span>
+              <Link href="/account" className="text-sm text-ink-muted hover:underline">{user.name}</Link>
               <SignOutButton />
             </>
           ) : (

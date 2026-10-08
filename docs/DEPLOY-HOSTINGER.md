@@ -123,7 +123,9 @@ published version until you publish again.
 ## 6. Background jobs (AI evaluations)
 
 Long AI evaluations (e.g. the prompt-hardening missions) run as **background
-jobs**. The learner's open page advances them a slice at a time, so they finish
+jobs**. The same cron job also sends grades back to an LMS and the update
+emails (certificates, reviewed results, cohorts joined), so export `APP_URL`
+and the `MAIL_*`/`SMTP_*` variables for it too. The learner's open page advances them a slice at a time, so they finish
 even without cron. To finish jobs whose learner closed the page, add an hPanel
 **Cron job** every 5 minutes (with the same environment variables exported, as
 in section 4):
