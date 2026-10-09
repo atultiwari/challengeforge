@@ -16,7 +16,7 @@ This completes the five phases of [`PLAN.md`](PLAN.md) §8.
 
 **Tests:**
 - 493 unit tests.
-- **145 database tests on each engine** (MySQL 8.0, MariaDB 11.8; CI adds MariaDB 10.11).
+- **148 database tests on each engine** (MySQL 8.0, MariaDB 11.8; CI adds MariaDB 10.11).
 - **22 Playwright journeys**: 21 on the main site plus 1 on a fresh install.
 
 ## Reviews at the phase boundary
